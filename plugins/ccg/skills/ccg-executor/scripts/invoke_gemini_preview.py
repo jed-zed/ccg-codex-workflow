@@ -84,6 +84,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--hold-seconds", type=int, default=10)
     parser.add_argument("--no-browser", action="store_true")
     parser.add_argument("--detach", action="store_true", help="Start in the background and return PID/log paths")
+    parser.add_argument("--preview-port", type=int, default=0, help=argparse.SUPPRESS)
     parser.add_argument("--approval-mode", default="plan", choices=["default", "auto_edit", "yolo", "plan"])
     parser.add_argument(
         "--direct-workdir",
@@ -109,6 +110,47 @@ def free_port() -> int:
         return int(sock.getsockname()[1])
 
 
+def wait_for_port(port: int, timeout_seconds: float = 10.0) -> bool:
+    deadline = time.time() + timeout_seconds
+    while time.time() < deadline:
+        try:
+            with socket.create_connection(("127.0.0.1", port), timeout=0.3):
+                return True
+        except OSError:
+            time.sleep(0.15)
+    return False
+
+
+def open_preview_url(url: str) -> bool:
+    if os.name == "nt":
+        creationflags = 0
+        if hasattr(subprocess, "CREATE_NO_WINDOW"):
+            creationflags = subprocess.CREATE_NO_WINDOW
+        for command in (
+            ["cmd", "/c", "start", "", url],
+            ["explorer.exe", url],
+        ):
+            try:
+                subprocess.Popen(
+                    command,
+                    stdin=subprocess.DEVNULL,
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                    creationflags=creationflags,
+                )
+                return True
+            except Exception:
+                continue
+
+    try:
+        if webbrowser.open_new_tab(url):
+            return True
+    except Exception:
+        pass
+
+    return False
+
+
 def default_output_file() -> Path:
     root = Path.home() / ".codex" / "ccg" / "logs"
     root.mkdir(parents=True, exist_ok=True)
@@ -125,6 +167,8 @@ def detach(args: argparse.Namespace, prompt: str, output_path: Path) -> int:
         prompt_file.write_text(prompt, encoding="utf-8", errors="replace")
 
     launcher_log = output_path.with_suffix(".launcher.log")
+    preview_port = args.preview_port or free_port()
+    preview_url = f"http://127.0.0.1:{preview_port}/"
     child_args = [
         sys.executable,
         str(Path(__file__).resolve()),
@@ -140,9 +184,10 @@ def detach(args: argparse.Namespace, prompt: str, output_path: Path) -> int:
         str(args.hold_seconds),
         "--approval-mode",
         args.approval_mode,
+        "--preview-port",
+        str(preview_port),
+        "--no-browser",
     ]
-    if args.no_browser:
-        child_args.append("--no-browser")
     if args.direct_workdir:
         child_args.append("--direct-workdir")
 
@@ -163,9 +208,15 @@ def detach(args: argparse.Namespace, prompt: str, output_path: Path) -> int:
     log_handle.close()
 
     print(f"CCG_GEMINI_PREVIEW_PID={proc.pid}", flush=True)
+    print(f"CCG_GEMINI_PREVIEW_URL={preview_url}", flush=True)
     print(f"CCG_GEMINI_OUTPUT_FILE={output_path}", flush=True)
     print(f"CCG_GEMINI_RESPONSE_FILE={output_path.with_suffix('.response.txt')}", flush=True)
     print(f"CCG_GEMINI_LAUNCHER_LOG={launcher_log}", flush=True)
+    if not args.no_browser:
+        ready = wait_for_port(preview_port)
+        opened = open_preview_url(preview_url) if ready else False
+        print(f"CCG_GEMINI_PREVIEW_READY={1 if ready else 0}", flush=True)
+        print(f"CCG_GEMINI_BROWSER_OPENED={1 if opened else 0}", flush=True)
     return 0
 
 
@@ -304,15 +355,16 @@ def make_handler() -> type[BaseHTTPRequestHandler]:
     return Handler
 
 
-def start_server(open_browser: bool) -> tuple[ThreadingHTTPServer, str]:
-    port = free_port()
+def start_server(open_browser: bool, port: int = 0) -> tuple[ThreadingHTTPServer, str]:
+    port = port or free_port()
     server = ThreadingHTTPServer(("127.0.0.1", port), make_handler())
     url = f"http://127.0.0.1:{port}/"
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
     print(f"CCG_GEMINI_PREVIEW_URL={url}", flush=True)
     if open_browser:
-        webbrowser.open(url)
+        opened = open_preview_url(url)
+        print(f"CCG_GEMINI_BROWSER_OPENED={1 if opened else 0}", flush=True)
     return server, url
 
 
@@ -491,7 +543,7 @@ def main() -> int:
 
     print(f"CCG_GEMINI_OUTPUT_FILE={output_path}", flush=True)
 
-    server, _ = start_server(open_browser=not args.no_browser)
+    server, _ = start_server(open_browser=not args.no_browser, port=args.preview_port)
     temp_dir: tempfile.TemporaryDirectory[str] | None = None
     try:
         gemini_workdir, temp_dir = prepare_gemini_workdir(args)

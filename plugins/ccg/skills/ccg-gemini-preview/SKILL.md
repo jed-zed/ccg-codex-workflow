@@ -16,4 +16,4 @@ python "<plugin-skill-root>\ccg-executor\scripts\invoke_gemini_preview.py" --wor
 
 The helper runs Gemini in a disposable workspace snapshot by default. Keep Gemini in read-only plan mode. Codex must inspect the output, adapt it to local code patterns, and apply any final edits itself. Use `--direct-workdir` only when the user explicitly accepts direct workspace access.
 
-For background mode, add `--detach` and later read the printed `CCG_GEMINI_RESPONSE_FILE`.
+For background mode, add `--detach`. The helper should still open the browser automatically and print `CCG_GEMINI_PREVIEW_URL`, `CCG_GEMINI_BROWSER_OPENED`, and `CCG_GEMINI_RESPONSE_FILE`; later read the response file before using Gemini's output.

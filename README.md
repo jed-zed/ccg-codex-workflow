@@ -104,6 +104,8 @@ Ask Gemini for bounded help with a browser preview:
 /ccg:gemini-preview Review this plan for missing backend edge cases
 ```
 
+Detached Gemini calls also open the browser preview automatically. If Windows blocks focus or popup behavior, use the printed `CCG_GEMINI_PREVIEW_URL`; successful launches print `CCG_GEMINI_BROWSER_OPENED=1`.
+
 Run quality gates:
 
 ```text

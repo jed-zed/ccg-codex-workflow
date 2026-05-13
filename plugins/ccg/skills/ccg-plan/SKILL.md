@@ -33,7 +33,8 @@ Create decision-complete CCG plans for later `/ccg:execute`. This skill replaces
 
 4. **Run Gemini read-only analysis**
    - Use the bundled helper from `../ccg-executor/scripts/invoke_gemini_preview.py`.
-   - Invoke Gemini with `--approval-mode plan --detach`, default model `gemini-2.5-flash`, and no `--direct-workdir`.
+   - Invoke Gemini with `--approval-mode plan --detach`, default model `gemini-2.5-flash`, no `--direct-workdir`, and no `--no-browser` unless the user explicitly asks for headless mode.
+   - Confirm the helper prints `CCG_GEMINI_BROWSER_OPENED=1` or report the printed `CCG_GEMINI_PREVIEW_URL` so the user can open it manually.
    - Include the enhanced requirement, context evidence, and a request for concise analysis: alternative approaches, edge cases, UI/UX concerns when relevant, tests, risks, and recommended plan steps.
    - Retry failed Gemini calls up to 2 times. If all attempts fail, stop and report the failure; do not generate a fake multi-model plan.
    - Read the printed `CCG_GEMINI_RESPONSE_FILE` before writing the final plan.
