@@ -8,7 +8,7 @@
   "plugins": [
     {
       "name": "ccg",
-      "description": "Codex-side CCG workflow executor. Claude Code is plan-only; Codex owns execution and may use Gemini as a bounded helper.",
+      "description": "Codex-side CCG workflow planner and executor. Codex owns planning/execution and may use Gemini as a bounded helper.",
       "version": "0.1.0",
       "source": "./plugins/ccg",
       "author": {

@@ -1,11 +1,11 @@
 ---
 name: executor
-description: Run the CCG workflow inside Codex. Use when the user invokes /ccg, /ccg:workflow, /ccg:execute, /ccg:excute, /ccg:codex-exec, asks Codex to execute a .claude/plan/*.md file, or wants Codex to orchestrate Gemini while implementing a Claude-generated CCG plan.
+description: Run the CCG workflow inside Codex. Use when the user invokes /ccg, /ccg:workflow, /ccg:execute, /ccg:excute, /ccg:codex-exec, asks Codex to execute a .claude/plan/*.md file, or wants Codex to orchestrate Gemini while implementing a CCG plan.
 ---
 
 # CCG Executor
 
-You are the Codex-side orchestrator for CCG workflow plans. Claude Code is used only to produce or revise plans; Codex owns execution, final code edits, verification, and delivery. Gemini is an auxiliary coding/review partner that Codex may call for bounded assistance, especially UI-heavy or broad implementation drafts.
+You are the Codex-side orchestrator for CCG workflow plans. Plans may be produced by `/ccg:plan` or by legacy Claude CCG planning files; Codex owns execution, final code edits, verification, and delivery. Gemini is an auxiliary coding/review partner that Codex may call for bounded assistance, especially UI-heavy or broad implementation drafts.
 
 ## Hard Boundaries
 
@@ -27,9 +27,8 @@ Claude Code orchestrates Codex + Gemini
 In Codex, the model is:
 
 ```text
-Codex orchestrates Gemini
-Claude Code only writes or revises plans
-Codex applies code, verifies, and reports
+Codex creates plans, orchestrates Gemini, applies code, verifies, and reports
+Legacy Claude CCG plans may still be executed as input artifacts
 ```
 
 When an old plan mentions `CODEX_SESSION`, `GEMINI_SESSION`, or Claude-driven handoff files, treat them as provenance and intent, not as sessions to resume. If the old workflow says Claude should dispatch subagents, translate that into Codex actions: local context search, optional Gemini read-only help, Codex edits, Codex verification.

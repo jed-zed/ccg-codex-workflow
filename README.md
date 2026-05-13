@@ -4,7 +4,7 @@ Codex-native CCG workflow plugin.
 
 This project rewrites CCG execution around Codex:
 
-- Claude Code writes or revises plans only.
+- Codex creates or revises CCG plans.
 - Codex is the orchestrator and final executor.
 - Gemini is a bounded helper for drafts, edge cases, tests, UI prototypes, and review.
 - Codex applies final code changes, runs verification, reviews diffs, and reports in Chinese.
@@ -19,15 +19,17 @@ codex plugin marketplace add I:\ai\ccg-codex-workflow
 
 Restart the currently open Codex TUI session so plugin skills and MCP entries reload.
 
-Codex CLI 0.130 loads this plugin's skills, but it does not currently expose marketplace plugin commands as custom slash-command autocomplete entries in the TUI. A computer reboot is not needed. If `/ccg:execute` does not appear in the autocomplete menu, type the invocation as normal prompt text:
+Codex CLI 0.130 loads this plugin's skills, but it does not currently expose marketplace plugin commands as custom slash-command autocomplete entries in the TUI. A computer reboot is not needed. If `/ccg:plan` or `/ccg:execute` does not appear in the autocomplete menu, type the invocation as normal prompt text:
 
 ```text
+/ccg:plan Add user login audit logging
 /ccg:execute .claude/plan/my-task.md
 ```
 
 If a TUI build intercepts unknown leading-slash input before the model sees it, prefix the prompt:
 
 ```text
+Execute /ccg:plan Add user login audit logging
 Execute /ccg:execute .claude/plan/my-task.md
 ```
 
@@ -35,6 +37,7 @@ The plugin provides these prompt invocations and matching skills:
 
 ```text
 /ccg:ccg
+/ccg:plan
 /ccg:execute
 /ccg:excute
 /ccg:codex-exec
@@ -77,7 +80,13 @@ powershell -ExecutionPolicy Bypass -File .\scripts\uninstall-codex-command-bridg
 
 ## Typical Usage
 
-Execute a Claude-generated CCG plan:
+Create a Codex-native CCG plan:
+
+```text
+/ccg:plan Add user login audit logging
+```
+
+Execute a CCG plan:
 
 ```text
 /ccg:execute .claude/plan/my-task.md

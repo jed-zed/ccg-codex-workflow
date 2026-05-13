@@ -17,8 +17,9 @@ Use the installed CCG plugin skill `ccg:executor`.
 If `$ARGUMENTS` is empty, show the available CCG commands in Chinese:
 
 - `/ccg:ccg` - show this command index.
+- `/ccg:plan <task>` - create or revise a CCG plan with Codex and Gemini analysis.
 - `/ccg:workflow` - explain the Codex-native CCG workflow.
-- `/ccg:execute <plan>` - execute a Claude-generated plan with Codex as orchestrator.
+- `/ccg:execute <plan>` - execute a CCG plan with Codex as orchestrator.
 - `/ccg:codex-exec <plan>` - explicit Codex-led execution alias.
 - `/ccg:excute <plan>` - typo-compatible alias.
 - `/ccg:review [plan-or-diff]` - review a CCG implementation.

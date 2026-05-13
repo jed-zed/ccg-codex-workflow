@@ -16,7 +16,7 @@ Use the installed CCG plugin skill `ccg:executor`.
 
 Explain or execute the Codex-native CCG workflow:
 
-- Claude Code writes or revises plans only.
+- Codex creates or revises plans with optional read-only Gemini analysis.
 - Codex orchestrates the work and owns final code edits.
 - Gemini assists with bounded code drafts, UI prototypes, edge cases, tests, or review.
 - Codex verifies and reports in Chinese.

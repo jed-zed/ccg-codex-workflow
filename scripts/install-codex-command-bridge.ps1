@@ -42,6 +42,7 @@ Copy-Command "ccg.md" (Join-Path $commandsRoot "ccg.md")
 
 # Namespaced /ccg:* command stubs for clients that support local command discovery.
 Copy-Command "ccg.md" (Join-Path $ccgNamespace "ccg.md")
+Copy-Command "plan.md" (Join-Path $ccgNamespace "plan.md")
 Copy-Command "execute.md" (Join-Path $ccgNamespace "execute.md")
 Copy-Command "excute.md" (Join-Path $ccgNamespace "excute.md")
 Copy-Command "codex-exec.md" (Join-Path $ccgNamespace "codex-exec.md")
@@ -57,4 +58,4 @@ Copy-Command "verify-security.md" (Join-Path $ccgNamespace "verify-security.md")
 Write-Output ""
 Write-Output "CCG command bridge installed under $commandsRoot"
 Write-Output "Restart Codex TUI to reload local files."
-Write-Output "Note: Codex CLI 0.130 may not surface custom command autocomplete. If /ccg:* is not shown, type /ccg:execute as normal prompt text."
+Write-Output "Note: Codex CLI 0.130 may not surface custom command autocomplete. If /ccg:* is not shown, type /ccg:plan or /ccg:execute as normal prompt text."

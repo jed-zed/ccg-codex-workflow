@@ -12,8 +12,9 @@ Route all real work to `skills/ccg-executor/SKILL.md`.
 If the user provided no argument, answer in Chinese with the CCG command index:
 
 - `/ccg:ccg` - show this index; with a plan path or task, execute it.
+- `/ccg:plan <task>` - create or revise a CCG plan with Codex and Gemini analysis.
 - `/ccg:workflow` - explain the Codex-native CCG workflow.
-- `/ccg:execute <plan>` - execute a Claude-generated CCG plan with Codex as orchestrator.
+- `/ccg:execute <plan>` - execute a CCG plan with Codex as orchestrator.
 - `/ccg:codex-exec <plan>` - explicit Codex-led execution alias.
 - `/ccg:excute <plan>` - typo-compatible alias.
 - `/ccg:review [plan-or-diff]` - review a CCG implementation.
@@ -26,4 +27,4 @@ If the user provided no argument, answer in Chinese with the CCG command index:
 
 If the user provided a plan path or task, treat it as `/ccg:execute`.
 
-Core rule: Claude Code is plan-only; Codex orchestrates; Gemini assists with bounded drafts, tests, edge cases, UI prototypes, or review; Codex applies final edits, verifies, and reports in Chinese.
+Core rule: Codex plans and executes; Gemini assists with bounded read-only planning analysis, drafts, tests, edge cases, UI prototypes, or review; Codex applies final edits, verifies, and reports in Chinese.

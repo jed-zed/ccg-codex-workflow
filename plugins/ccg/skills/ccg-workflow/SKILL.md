@@ -10,6 +10,6 @@ Load `skills/ccg-executor/SKILL.md` for the full rule.
 Explain in Chinese:
 
 - Original CCG: Claude Code orchestrates Codex + Gemini.
-- Codex CCG: Claude Code only writes plans; Codex orchestrates; Gemini assists; Codex applies final code, verifies, and reports.
+- Codex CCG: Codex creates plans, orchestrates execution, and applies final code; Gemini assists as a bounded read-only helper for planning, drafts, tests, UI, edge cases, and review.
 
 If the user supplies a plan path or task, route it to `/ccg:execute`.
