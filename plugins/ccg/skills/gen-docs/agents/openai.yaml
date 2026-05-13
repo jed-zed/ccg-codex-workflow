@@ -1,0 +1,3 @@
+display_name: CCG Gen Docs
+short_description: Generate README and DESIGN skeletons for new modules.
+default_prompt: gen-docs <module-path>

@@ -1,0 +1,44 @@
+{
+  "name": "ccg",
+  "version": "0.1.0",
+  "description": "Codex-native CCG workflow executor. Claude writes plans; Codex orchestrates Gemini, applies code, verifies changes, and reports results.",
+  "author": {
+    "name": "jed-zed",
+    "email": "noreply@example.com",
+    "url": "https://github.com/jed-zed"
+  },
+  "homepage": "https://github.com/jed-zed/ccg-codex-workflow",
+  "repository": "https://github.com/jed-zed/ccg-codex-workflow",
+  "license": "MIT",
+  "keywords": [
+    "ccg",
+    "codex",
+    "gemini",
+    "workflow",
+    "plan-execution"
+  ],
+  "skills": "./skills/",
+  "mcpServers": "./.mcp.json",
+  "interface": {
+    "displayName": "CCG Codex Workflow",
+    "shortDescription": "Run CCG plans with Codex as executor and Gemini as helper",
+    "longDescription": "A Codex-native rewrite of the CCG workflow. Claude Code is treated as a planning-only model, Codex owns implementation and verification, and Gemini can be called through a bounded helper with a local browser preview for drafts, edge-case analysis, tests, or review.",
+    "developerName": "jed-zed",
+    "category": "Coding",
+    "capabilities": [
+      "Interactive",
+      "Read",
+      "Write"
+    ],
+    "websiteURL": "https://github.com/jed-zed/ccg-codex-workflow",
+    "privacyPolicyURL": "https://github.com/jed-zed/ccg-codex-workflow",
+    "termsOfServiceURL": "https://github.com/jed-zed/ccg-codex-workflow",
+    "defaultPrompt": [
+      "/ccg:execute .claude/plan/task.md",
+      "/ccg:gemini-preview Review this plan",
+      "/ccg:verify-change"
+    ],
+    "brandColor": "#2563EB",
+    "screenshots": []
+  }
+}

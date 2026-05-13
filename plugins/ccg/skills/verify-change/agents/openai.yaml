@@ -1,0 +1,3 @@
+display_name: CCG Verify Change
+short_description: Analyze change impact and documentation sync.
+default_prompt: verify-change

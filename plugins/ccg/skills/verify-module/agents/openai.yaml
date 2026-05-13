@@ -1,0 +1,3 @@
+display_name: CCG Verify Module
+short_description: Check module structure and required documentation.
+default_prompt: verify-module <module-path>

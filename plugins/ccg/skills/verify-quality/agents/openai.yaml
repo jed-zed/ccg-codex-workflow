@@ -1,0 +1,3 @@
+display_name: CCG Verify Quality
+short_description: Review complexity, duplication, naming, and code smells.
+default_prompt: verify-quality <changed-path>

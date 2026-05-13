@@ -1,0 +1,19 @@
+---
+name: gemini-preview
+description: Run a read-only Gemini helper task with a local browser preview. Use when the user invokes /ccg:gemini-preview, asks to test Gemini preview, or wants to watch Gemini output while Codex delegates a CCG helper task.
+---
+
+# CCG Gemini Preview
+
+Use the Gemini preview helper bundled with this plugin:
+`../ccg-executor/scripts/invoke_gemini_preview.py`.
+
+Default command:
+
+```powershell
+python "<plugin-skill-root>\ccg-executor\scripts\invoke_gemini_preview.py" --workdir "<repo-abs-path>" --model gemini-2.5-flash --prompt "<focused prompt>"
+```
+
+The helper runs Gemini in a disposable workspace snapshot by default. Keep Gemini in read-only plan mode. Codex must inspect the output, adapt it to local code patterns, and apply any final edits itself. Use `--direct-workdir` only when the user explicitly accepts direct workspace access.
+
+For background mode, add `--detach` and later read the printed `CCG_GEMINI_RESPONSE_FILE`.

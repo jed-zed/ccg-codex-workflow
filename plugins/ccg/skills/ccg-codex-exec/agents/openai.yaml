@@ -1,0 +1,3 @@
+display_name: CCG Codex Exec
+short_description: Explicit Codex-led CCG execution alias.
+default_prompt: /ccg:codex-exec .claude/plan/task.md

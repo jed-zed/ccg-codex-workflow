@@ -1,0 +1,3 @@
+display_name: CCG
+short_description: Show or route the Codex-native CCG workflow.
+default_prompt: /ccg

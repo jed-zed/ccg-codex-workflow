@@ -1,0 +1,3 @@
+display_name: CCG Executor
+short_description: Run CCG with Codex as orchestrator and Gemini as helper.
+default_prompt: /ccg:execute .claude/plan/task.md

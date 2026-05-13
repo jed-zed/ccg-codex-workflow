@@ -1,0 +1,3 @@
+display_name: CCG Verify Security
+short_description: Scan changed code for security risks and dangerous patterns.
+default_prompt: verify-security <changed-path>

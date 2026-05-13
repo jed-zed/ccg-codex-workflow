@@ -1,0 +1,22 @@
+{
+  "name": "ccg-codex-workflow",
+  "description": "Marketplace for the Codex-native CCG workflow plugin.",
+  "owner": {
+    "name": "jed-zed",
+    "email": "noreply@example.com"
+  },
+  "plugins": [
+    {
+      "name": "ccg",
+      "description": "Codex-side CCG workflow executor. Claude Code is plan-only; Codex owns execution and may use Gemini as a bounded helper.",
+      "version": "0.1.0",
+      "source": "./plugins/ccg",
+      "author": {
+        "name": "jed-zed",
+        "email": "noreply@example.com"
+      },
+      "category": "Coding",
+      "homepage": "https://github.com/jed-zed/ccg-codex-workflow"
+    }
+  ]
+}

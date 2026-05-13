@@ -1,0 +1,3 @@
+display_name: CCG Review
+short_description: Review a CCG implementation in Codex-led mode.
+default_prompt: /ccg:review

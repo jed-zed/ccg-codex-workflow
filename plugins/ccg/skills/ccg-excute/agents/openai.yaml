@@ -1,0 +1,3 @@
+display_name: CCG Excute
+short_description: Typo-compatible alias for CCG Execute.
+default_prompt: /ccg:excute .claude/plan/task.md
