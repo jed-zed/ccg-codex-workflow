@@ -81,9 +81,48 @@ function parseNumstat(output) {
   return statMap;
 }
 
+function mergeNumstatMaps(...maps) {
+  const merged = {};
+  for (const statMap of maps) {
+    for (const [filePath, stats] of Object.entries(statMap)) {
+      if (!merged[filePath]) merged[filePath] = [0, 0];
+      merged[filePath][0] += stats[0];
+      merged[filePath][1] += stats[1];
+    }
+  }
+  return merged;
+}
+
 function applyNumstat(changes, statMap) {
   for (const c of changes) {
     if (statMap[c.path]) { [c.additions, c.deletions] = statMap[c.path]; }
+  }
+  return changes;
+}
+
+function countTextFileLines(filePath) {
+  const fullPath = path.resolve(filePath);
+  let buffer;
+  try {
+    const stat = fs.statSync(fullPath);
+    if (!stat.isFile()) return 0;
+    buffer = fs.readFileSync(fullPath);
+  } catch {
+    return 0;
+  }
+  if (!buffer.length || buffer.includes(0)) return 0;
+  const text = buffer.toString("utf8");
+  if (!text) return 0;
+  const matches = text.match(/\r\n|\r|\n/g);
+  const newlineCount = matches ? matches.length : 0;
+  return newlineCount + (text.endsWith("\n") || text.endsWith("\r") ? 0 : 1);
+}
+
+function estimateUntrackedAdditions(changes) {
+  for (const c of changes) {
+    if (c.type === "added" && c.additions === 0 && c.deletions === 0) {
+      c.additions = countTextFileLines(c.path);
+    }
   }
   return changes;
 }
@@ -115,7 +154,11 @@ function getWorkingChanges() {
     const c = parsePorcelainLine(line);
     if (c) changes.push(c);
   }
-  return applyNumstat(changes, parseNumstat(git('diff', '--numstat')));
+  const numstat = mergeNumstatMaps(
+    parseNumstat(git('diff', '--numstat')),
+    parseNumstat(git('diff', '--cached', '--numstat'))
+  );
+  return estimateUntrackedAdditions(applyNumstat(changes, numstat));
 }
 
 function isPathInModule(filePath, mod) {

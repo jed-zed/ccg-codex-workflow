@@ -3,6 +3,8 @@ param(
   [string]$CodexHome = $env:CODEX_HOME,
   [string]$PluginRoot = "",
   [switch]$Fix,
+  [switch]$CheckGeminiModel,
+  [string]$GeminiModel = "",
   [switch]$Json
 )
 
@@ -26,6 +28,14 @@ if (-not [string]::IsNullOrWhiteSpace($PluginRoot)) {
 
 if ($Fix) {
   $arguments["Fix"] = $true
+}
+
+if ($CheckGeminiModel) {
+  $arguments["CheckGeminiModel"] = $true
+}
+
+if (-not [string]::IsNullOrWhiteSpace($GeminiModel)) {
+  $arguments["GeminiModel"] = $GeminiModel
 }
 
 if ($Json) {

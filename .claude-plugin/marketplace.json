@@ -9,7 +9,7 @@
     {
       "name": "ccg",
       "description": "Codex-side CCG workflow planner and executor. Codex owns planning/execution and may use Gemini as a bounded helper.",
-      "version": "0.1.3",
+      "version": "0.1.4",
       "source": "./plugins/ccg",
       "author": {
         "name": "jed-zed",

@@ -1,6 +1,6 @@
 {
   "name": "ccg",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "description": "Codex-native CCG workflow planner and executor. Codex creates plans, orchestrates Gemini, applies code, verifies changes, and reports results.",
   "author": {
     "name": "jed-zed",
@@ -23,7 +23,7 @@
   "interface": {
     "displayName": "CCG Codex Workflow",
     "shortDescription": "Run CCG plans with Codex as executor and Gemini as helper",
-    "longDescription": "A Codex-native rewrite of the CCG workflow. Codex owns planning, implementation, and verification, while Gemini can be called through bounded standard prompt templates with a local browser preview for read-only planning analysis, drafts, edge-case analysis, tests, or review.",
+    "longDescription": "A Codex-native rewrite of the CCG workflow. Codex owns planning, implementation, and verification, while Gemini can be called through bounded standard prompt templates with a local browser preview for read-only planning analysis, drafts, edge-case analysis, tests, or review. Includes cache diagnostics, hardened snapshots, and local quality/security gates.",
     "developerName": "jed-zed",
     "category": "Coding",
     "capabilities": [

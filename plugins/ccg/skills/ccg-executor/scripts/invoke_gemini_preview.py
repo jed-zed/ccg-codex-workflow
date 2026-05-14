@@ -14,6 +14,7 @@ import json
 import os
 import shutil
 import socket
+import stat
 import subprocess
 import sys
 import tempfile
@@ -126,7 +127,7 @@ SNAPSHOT_IGNORED_PREFIXES = (
 )
 SNAPSHOT_EXCLUDE_SUMMARY = (
     ".env,.env.*,*.pem,*.key,*.p12,*.pfx,*.crt,id_rsa,id_ed25519,"
-    ".aws,.gcp,.azure,.ssh,credentials*,service-account*.json"
+    ".aws,.gcp,.azure,.ssh,credentials*,service-account*.json,symlinks,junctions"
 )
 
 
@@ -555,8 +556,29 @@ def is_snapshot_ignored(name: str) -> bool:
     return False
 
 
-def snapshot_ignore(_directory: str, names: list[str]) -> set[str]:
-    return {name for name in names if is_snapshot_ignored(name)}
+def is_snapshot_link(path: Path) -> bool:
+    try:
+        if path.is_symlink():
+            return True
+        is_junction = getattr(path, "is_junction", None)
+        if is_junction and is_junction():
+            return True
+        if os.name == "nt":
+            attrs = getattr(path.lstat(), "st_file_attributes", 0)
+            reparse = getattr(stat, "FILE_ATTRIBUTE_REPARSE_POINT", 0x400)
+            return bool(attrs & reparse)
+        return False
+    except OSError:
+        return True
+
+
+def snapshot_ignore(directory: str, names: list[str]) -> set[str]:
+    ignored = set()
+    base = Path(directory)
+    for name in names:
+        if is_snapshot_ignored(name) or is_snapshot_link(base / name):
+            ignored.add(name)
+    return ignored
 
 
 def prepare_gemini_workdir(args: argparse.Namespace) -> tuple[Path, tempfile.TemporaryDirectory[str] | None]:

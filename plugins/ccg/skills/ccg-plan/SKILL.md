@@ -53,7 +53,8 @@ This gate does not apply to empty-input usage/help responses.
    - Treat `CCG_GEMINI_SNAPSHOT_EXCLUDES` as a security boundary. If excluded secret/config files are relevant, ask the user for sanitized details instead of weakening the snapshot exclusions.
    - Include the enhanced requirement, context evidence, and a request for concise analysis: alternative approaches, edge cases, UI/UX concerns when relevant, tests, risks, and recommended plan steps.
    - Retry failed Gemini calls up to 2 times. If all attempts fail, stop and report the failure; do not generate a fake multi-model plan.
-   - Read the printed `CCG_GEMINI_RESPONSE_FILE` before writing the final plan.
+   - After detach, Poll `CCG_GEMINI_RESPONSE_FILE` every 5 seconds. Stop only when the file exists and has size > 0, then read it before writing the final plan.
+   - If the response file is still missing or empty after 10 minutes, inspect `CCG_GEMINI_LAUNCHER_LOG`; if the launcher log shows a failure, retry the helper call. After two retries or 10 minutes on the final attempt, stop and report failure without writing a plan.
 
 5. **Synthesize the plan**
    - Codex is authoritative for backend, data, architecture, repository patterns, and final sequencing.

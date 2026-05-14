@@ -56,6 +56,14 @@ codex debug prompt-input | Select-String "ccg:"
 
 `doctor.ps1` is read-only. It checks the plugin files, Codex plugin cache, prompt-visible `ccg:*` skills, MCP visibility, optional command bridge files, and Gemini CLI presence. It cannot prove slash-menu autocomplete, because that depends on the Codex TUI build; use prompt-text invocation when autocomplete is absent.
 
+To make a real, optional Gemini model availability probe, run:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\doctor.ps1 -CheckGeminiModel -GeminiModel gemini-3.1-pro-preview -Verbose
+```
+
+This sends a minimal Gemini CLI request with `--skip-trust`. It is not part of the default doctor because default diagnostics stay read-only and do not call a model.
+
 ### Local Development Cache Sync
 
 For first install, use `codex plugin marketplace add`. For local development after editing files in this repository, Codex CLI 0.130 does not guarantee that running `marketplace add` again refreshes an already-added local marketplace cache. Sync the local cache explicitly:
@@ -236,7 +244,7 @@ It runs Gemini with `stream-json`, creates a disposable workspace snapshot by de
 ~/.codex/ccg/logs/
 ```
 
-Snapshots exclude common secret files and directories such as `.env`, `.env.*`, `*.pem`, `*.key`, `*.p12`, `*.pfx`, `id_rsa`, `id_ed25519`, `.aws`, `.gcp`, and `.azure`. The helper prints `CCG_GEMINI_SNAPSHOT_PATH` and `CCG_GEMINI_SNAPSHOT_EXCLUDES` for auditability.
+Snapshots exclude common secret files and directories such as `.env`, `.env.*`, `*.pem`, `*.key`, `*.p12`, `*.pfx`, `id_rsa`, `id_ed25519`, `.aws`, `.gcp`, and `.azure`. They also ignore symlinks and Windows junctions so a repository link cannot pull external secrets into the Gemini snapshot. The helper prints `CCG_GEMINI_SNAPSHOT_PATH` and `CCG_GEMINI_SNAPSHOT_EXCLUDES` for auditability.
 
 Smoke test:
 

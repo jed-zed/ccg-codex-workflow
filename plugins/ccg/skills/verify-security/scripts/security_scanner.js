@@ -164,8 +164,9 @@ const SECRET_RULE_IDS = new Set([
 ]);
 const DEFAULT_EXCLUDES = [
   '.git', 'node_modules', '__pycache__', '.venv', 'venv',
-  'dist', 'build', '.tox', 'tests', 'test', '__tests__', 'spec',
+  'dist', 'build', '.tox',
 ];
+const TEST_DIR_NAMES = new Set(['tests', 'test', '__tests__', 'spec']);
 
 function extensionKeys(filePath) {
   const base = path.basename(filePath).toLowerCase();
@@ -197,7 +198,7 @@ function isProbablyTextFile(filePath) {
 function ruleAppliesToFile(rule, filePath) {
   const exts = rule.extensions;
   const keys = extensionKeys(filePath);
-  if (exts.includes('*')) return true;
+  if (exts.includes('*')) return isProbablyTextFile(filePath);
   if (SECRET_RULE_IDS.has(rule.id) && isProbablyTextFile(filePath)) return true;
   for (const key of keys) {
     if (exts.includes(key)) return true;
@@ -205,13 +206,20 @@ function ruleAppliesToFile(rule, filePath) {
   return false;
 }
 
-function scanFile(filePath, rules) {
+function isTestPath(filePath) {
+  return filePath
+    .split(/[\\/]+/)
+    .some((part) => TEST_DIR_NAMES.has(part.toLowerCase()));
+}
+
+function scanFile(filePath, rules, relativePath = filePath) {
   const findings = [];
   let content;
   try { content = fs.readFileSync(filePath, 'utf-8'); } catch { return findings; }
   const lines = content.split('\n');
 
   for (const rule of rules) {
+    if (!SECRET_RULE_IDS.has(rule.id) && isTestPath(relativePath)) continue;
     if (!ruleAppliesToFile(rule, filePath)) continue;
 
     for (let i = 0; i < lines.length; i++) {
@@ -265,7 +273,10 @@ function scanDirectory(scanPath, excludeDirs) {
   const resolved = path.resolve(scanPath);
   const findings = [];
   const files = walkDir(resolved, excludeDirs);
-  for (const f of files) findings.push(...scanFile(f, SECURITY_RULES));
+  for (const f of files) {
+    const relativePath = path.relative(resolved, f);
+    findings.push(...scanFile(f, SECURITY_RULES, relativePath));
+  }
   findings.sort((a, b) =>
     (SEVERITY_ORDER[a.severity] ?? 9) - (SEVERITY_ORDER[b.severity] ?? 9));
   const passed = !findings.some(

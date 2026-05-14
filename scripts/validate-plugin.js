@@ -122,12 +122,19 @@ function validateGeminiTemplates() {
 
 function validateDoctorFixDocs() {
   const doctorSkill = fs.readFileSync(path.join(repoRoot, "plugins/ccg/skills/ccg-doctor/SKILL.md"), "utf8");
-  for (const phrase of ["--fix", "source checkout", "read-only", "sync-local-plugin-cache.ps1"]) {
+  for (const phrase of [
+    "--fix",
+    "source checkout",
+    "read-only",
+    "sync-local-plugin-cache.ps1",
+    "-CheckGeminiModel",
+    "--skip-trust",
+  ]) {
     if (!doctorSkill.includes(phrase)) fail(`ccg-doctor skill is missing fix guidance phrase: ${phrase}`);
   }
 
   const doctorScript = fs.readFileSync(path.join(repoRoot, "plugins/ccg/scripts/doctor.ps1"), "utf8");
-  for (const phrase of ["[switch]$Fix", "ShouldProcess", "sync-local-plugin-cache.ps1"]) {
+  for (const phrase of ["[switch]$Fix", "[switch]$CheckGeminiModel", "ShouldProcess", "sync-local-plugin-cache.ps1"]) {
     if (!doctorScript.includes(phrase)) fail(`doctor.ps1 is missing fix implementation phrase: ${phrase}`);
   }
 

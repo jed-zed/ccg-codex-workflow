@@ -46,6 +46,62 @@ function writeFile(filePath, content) {
   fs.writeFileSync(filePath, content, "utf8");
 }
 
+function createDirectoryLink(linkPath, targetPath) {
+  fs.mkdirSync(path.dirname(linkPath), { recursive: true });
+  if (process.platform === "win32") {
+    const result = run("cmd", ["/c", "mklink", "/J", linkPath, targetPath], { allowFailure: true });
+    return result.status === 0;
+  }
+  try {
+    fs.symlinkSync(targetPath, linkPath, "dir");
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function createFakeGemini(binDir) {
+  fs.mkdirSync(binDir, { recursive: true });
+  if (process.platform === "win32") {
+    const scriptPath = path.join(binDir, "gemini.cmd");
+    fs.writeFileSync(
+      scriptPath,
+      [
+        "@echo off",
+        "set FOUND_SKIP_TRUST=0",
+        ":loop",
+        "if \"%~1\"==\"\" goto done",
+        "if \"%~1\"==\"--skip-trust\" set FOUND_SKIP_TRUST=1",
+        "shift",
+        "goto loop",
+        ":done",
+        "if \"%FOUND_SKIP_TRUST%\"==\"1\" (",
+        "  echo CCG_DOCTOR_MODEL_OK %*",
+        "  exit /b 0",
+        ")",
+        "echo missing --skip-trust 1>&2",
+        "exit /b 3",
+        "",
+      ].join("\r\n"),
+      "utf8"
+    );
+    return scriptPath;
+  }
+  const scriptPath = path.join(binDir, "gemini");
+  fs.writeFileSync(
+    scriptPath,
+    "#!/bin/sh\n" +
+      "found=0\n" +
+      "for arg in \"$@\"; do [ \"$arg\" = \"--skip-trust\" ] && found=1; done\n" +
+      "if [ \"$found\" = \"1\" ]; then echo CCG_DOCTOR_MODEL_OK \"$@\"; exit 0; fi\n" +
+      "echo missing --skip-trust >&2\n" +
+      "exit 3\n",
+    "utf8"
+  );
+  fs.chmodSync(scriptPath, 0o755);
+  return scriptPath;
+}
+
 function initGitRepo() {
   const dir = tempDir("ccg-change-fixture-");
   run("git", ["init"], { cwd: dir });
@@ -176,6 +232,37 @@ test("verify-change staged mode records cached numstat additions", () => {
   );
 });
 
+test("verify-change default working mode includes staged numstat additions", () => {
+  const dir = initGitRepo();
+  writeFile(
+    path.join(dir, "src", "app.js"),
+    Array.from({ length: 37 }, (_, i) => `console.log('default-staged-${i}');`).join("\n") + "\n"
+  );
+  run("git", ["add", "src/app.js"], { cwd: dir });
+  const result = run(node, [changeAnalyzer, "--json"], { cwd: dir });
+  const json = parseJsonOutput(result);
+  assert(json.total_additions >= 37, `expected default additions >= 37, got ${json.total_additions}`);
+  assert(
+    json.changes.some((change) => change.path === "src/app.js" && change.additions >= 37),
+    "expected default mode to include staged additions"
+  );
+});
+
+test("verify-change default working mode estimates untracked file additions", () => {
+  const dir = initGitRepo();
+  writeFile(
+    path.join(dir, "src", "new-feature.js"),
+    Array.from({ length: 38 }, (_, i) => `export const value${i} = ${i};`).join("\n") + "\n"
+  );
+  const result = run(node, [changeAnalyzer, "--json"], { cwd: dir });
+  const json = parseJsonOutput(result);
+  assert(json.total_additions >= 38, `expected untracked additions >= 38, got ${json.total_additions}`);
+  assert(
+    json.changes.some((change) => change.path === "src/new-feature.js" && change.additions >= 38),
+    "expected default mode to estimate additions for untracked code files"
+  );
+});
+
 test("verify-security scans env, key, and extensionless text secrets", () => {
   const dir = tempDir("ccg-security-fixture-");
   const envSecretName = "API_" + "KEY";
@@ -192,6 +279,31 @@ test("verify-security scans env, key, and extensionless text secrets", () => {
   assert(foundPaths.has(".env"), "expected .env secret finding");
   assert(foundPaths.has("server.pem"), "expected .pem private-key finding");
   assert(foundPaths.has("id_rsa"), "expected extensionless private-key finding");
+});
+
+test("verify-security scans secrets inside test fixtures", () => {
+  const dir = tempDir("ccg-security-tests-fixture-");
+  const privateKeyHeader = "-----BEGIN " + "PRIVATE KEY-----";
+  const privateKeyFooter = "-----END " + "PRIVATE KEY-----";
+  writeFile(path.join(dir, "tests", "fixtures", "sample.key"), `${privateKeyHeader}\nabc\n${privateKeyFooter}\n`);
+  const result = run(node, [securityScanner, dir, "--json"], { allowFailure: true });
+  const json = parseJsonOutput(result);
+  assert(
+    json.findings.some((finding) => finding.file_path.includes(path.join("tests", "fixtures", "sample.key"))),
+    "expected secret finding inside tests/fixtures"
+  );
+});
+
+test("verify-security does not treat parent test directories as project test paths", () => {
+  const root = tempDir("ccg-security-parent-test-");
+  const project = path.join(root, "test", "project");
+  writeFile(path.join(project, "src", "app.js"), "document.body.innerHTML = userInput;\n");
+  const result = run(node, [securityScanner, project, "--json"], { allowFailure: true });
+  const json = parseJsonOutput(result);
+  assert(
+    json.findings.some((finding) => finding.category === "XSS"),
+    "expected non-secret rule to apply outside in-repository test directories"
+  );
 });
 
 test("gen-docs readme-only and design-only flags are honored", () => {
@@ -331,6 +443,72 @@ finally:
   const result = run(python, ["-c", snippet, geminiPreview, source]);
   assert(result.stdout.includes("SAFE_EXISTS=True"), `expected safe file in snapshot:\n${result.stdout}`);
   assert(result.stdout.includes("SENSITIVE_EXISTS=False"), `expected sensitive files excluded:\n${result.stdout}`);
+});
+
+test("Gemini snapshot ignores symlinked or junction directories", () => {
+  const source = tempDir("ccg-gemini-symlink-source-");
+  const outside = tempDir("ccg-gemini-symlink-outside-");
+  writeFile(path.join(source, "src", "safe.txt"), "safe\n");
+  writeFile(path.join(outside, "secret.txt"), "external secret\n");
+  const linkCreated = createDirectoryLink(path.join(source, "linked-secrets"), outside);
+  assert(linkCreated, "expected test environment to support directory symlink or junction creation");
+
+  const snippet = `
+import importlib.util, pathlib, sys
+script = pathlib.Path(sys.argv[1])
+source = pathlib.Path(sys.argv[2])
+spec = importlib.util.spec_from_file_location("gemini_preview", script)
+module = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(module)
+class Args:
+    workdir = str(source)
+    direct_workdir = False
+args = Args()
+snapshot, temp_dir = module.prepare_gemini_workdir(args)
+try:
+    print("SAFE_EXISTS=" + str((snapshot / "src" / "safe.txt").exists()))
+    print("LINK_EXISTS=" + str((snapshot / "linked-secrets").exists()))
+    print("LINK_SECRET_EXISTS=" + str((snapshot / "linked-secrets" / "secret.txt").exists()))
+finally:
+    temp_dir.cleanup()
+`;
+  const result = run(python, ["-c", snippet, geminiPreview, source]);
+  assert(result.stdout.includes("SAFE_EXISTS=True"), `expected safe file in snapshot:\n${result.stdout}`);
+  assert(result.stdout.includes("LINK_EXISTS=False"), `expected linked directory excluded:\n${result.stdout}`);
+  assert(
+    result.stdout.includes("LINK_SECRET_EXISTS=False"),
+    `expected symlink target content excluded:\n${result.stdout}`
+  );
+});
+
+test("Gemini snapshot treats Windows reparse points as links on Python without Path.is_junction", () => {
+  const snippet = `
+import importlib.util, pathlib, stat, sys
+script = pathlib.Path(sys.argv[1])
+spec = importlib.util.spec_from_file_location("gemini_preview", script)
+module = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(module)
+if not hasattr(stat, "FILE_ATTRIBUTE_REPARSE_POINT"):
+    stat.FILE_ATTRIBUTE_REPARSE_POINT = 0x400
+class FakeReparsePoint:
+    def is_symlink(self):
+        return False
+    def lstat(self):
+        class StatResult:
+            st_file_attributes = stat.FILE_ATTRIBUTE_REPARSE_POINT
+        return StatResult()
+original_name = module.os.name
+original_is_junction = getattr(FakeReparsePoint, "is_junction", None)
+module.os.name = "nt"
+try:
+    if original_is_junction is not None:
+        delattr(FakeReparsePoint, "is_junction")
+    print("REPARSE_LINK=" + str(module.is_snapshot_link(FakeReparsePoint())))
+finally:
+    module.os.name = original_name
+`;
+  const result = run(python, ["-c", snippet, geminiPreview]);
+  assert(result.stdout.includes("REPARSE_LINK=True"), `expected reparse point fallback:\n${result.stdout}`);
 });
 
 test("Gemini preview helper default model supports environment and CLI overrides", () => {
@@ -498,6 +676,13 @@ test("ccg-plan skill requires a Gemini response gate", () => {
   assert(text.includes("gemini-3.1-pro-preview"), "expected upgraded default Gemini model");
 });
 
+test("ccg-plan skill defines detached Gemini response polling", () => {
+  const text = fs.readFileSync(ccgPlanSkill, "utf8");
+  assert(text.includes("Poll `CCG_GEMINI_RESPONSE_FILE` every 5 seconds"), "expected response polling cadence");
+  assert(text.includes("exists and has size > 0"), "expected non-empty response condition");
+  assert(text.includes("10 minutes"), "expected timeout guidance");
+});
+
 test("doctor warns when source plugin and cache digests differ", () => {
   const codexHome = tempDir("ccg-doctor-codex-");
   const pluginRoot = tempDir("ccg-doctor-plugin-");
@@ -644,6 +829,45 @@ test("doctor fix does not install command bridge", () => {
   assert(
     json.checks.some((check) => check.name === "command bridge: ccg.md" && check.status === "WARN"),
     "expected missing command bridge to remain a warning"
+  );
+});
+
+test("doctor can optionally check Gemini model availability", () => {
+  const codexHome = tempDir("ccg-doctor-model-codex-");
+  const fakeBin = tempDir("ccg-doctor-model-bin-");
+  const version = realPluginVersion();
+  const cacheRoot = path.join(codexHome, "plugins", "cache", "ccg-codex-workflow", "ccg", version);
+  fs.cpSync(realPluginRoot, cacheRoot, { recursive: true });
+  createFakeGemini(fakeBin);
+
+  const result = run(
+    powershell,
+    [
+      "-NoProfile",
+      "-ExecutionPolicy",
+      "Bypass",
+      "-File",
+      pluginDoctor,
+      "-CodexHome",
+      codexHome,
+      "-PluginRoot",
+      realPluginRoot,
+      "-CheckGeminiModel",
+      "-GeminiModel",
+      "fixture-model",
+      "-Json",
+    ],
+    {
+      allowFailure: true,
+      env: { PATH: `${fakeBin}${path.delimiter}${process.env.PATH || ""}` },
+    }
+  );
+  const json = parseJsonOutput(result);
+  assert(
+    json.checks.some(
+      (check) => check.name === "Gemini model available: fixture-model" && check.status === "PASS"
+    ),
+    "expected optional Gemini model availability check to pass with fake Gemini"
   );
 });
 

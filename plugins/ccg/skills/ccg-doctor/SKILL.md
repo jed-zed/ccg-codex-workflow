@@ -27,6 +27,14 @@ If the user asks for JSON or machine-readable output:
 powershell -NoProfile -ExecutionPolicy Bypass -File "<plugin-root>\scripts\doctor.ps1" -Json
 ```
 
+If the user explicitly asks to check Gemini model availability, add `-CheckGeminiModel`. Use `-GeminiModel <model>` only when the user names a model; otherwise doctor checks the configured default model:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File "<plugin-root>\scripts\doctor.ps1" -CheckGeminiModel -GeminiModel gemini-3.1-pro-preview -Verbose
+```
+
+The model probe uses Gemini CLI `--skip-trust` so availability diagnostics do not stall on workspace trust prompts.
+
 If the user invokes `/ccg:doctor --fix`, first determine whether the current workspace is the `ccg-codex-workflow` source checkout by checking for `plugins/ccg/.codex-plugin/plugin.json` and `scripts/sync-local-plugin-cache.ps1`.
 
 - In the source checkout, run:
@@ -49,5 +57,5 @@ powershell -NoProfile -ExecutionPolicy Bypass -File "<plugin-root>\scripts\docto
 - Default doctor remains read-only and must not modify `.codex`.
 - With `--fix`, only refresh the local CCG plugin cache from the source checkout. Do not install or remove command bridge files.
 - Do not install or uninstall the command bridge.
-- Do not call Gemini or run a real model request.
+- Do not call Gemini or run a real model request unless the user explicitly asks for `--check-gemini-model` or equivalent model availability diagnostics.
 - Do not change repository files while handling `/ccg:doctor`.
