@@ -12,6 +12,8 @@ You are the Codex-side orchestrator for CCG workflow plans. Plans may be produce
 - Do not modify the original Claude CCG plugin under `~/.claude/commands/ccg`, `~/.claude/.ccg`, or `~/.claude/skills/ccg`.
 - Do not call `~/.claude/bin/codeagent-wrapper.exe` or use Claude execution quota.
 - Do not let Gemini directly own the workspace. Gemini should provide analysis, implementation sketches, focused patches, tests, or review notes; Codex applies final edits and verifies them.
+- Every Gemini call in the CCG workflow must use the bundled preview helper `scripts/invoke_gemini_preview.py`, which opens a browser preview by default. `/ccg:gemini-preview` is only a manual smoke-test/debug entry, not the only path that shows the preview.
+- Do not call the raw `gemini`, `gemini.cmd`, or `gemini.exe` CLI directly for `/ccg:plan`, `/ccg:execute`, `/ccg:review`, or workflow-internal delegation. The only exception is `/ccg:doctor --check-gemini-model`, which performs an explicit availability probe.
 - Preserve existing user changes. Inspect `git status` before edits and work around unrelated dirty files.
 - Communicate with the user in Chinese. Tool prompts and external documentation queries may be English.
 - Prefer `mcp__ace-tool__search_context` as the primary semantic code search tool when the user has configured ace-tool globally. Use `mcp__fast-context__fast_context_search` as a supplement when ace-tool is unavailable or insufficient.
@@ -50,7 +52,7 @@ When an old plan mentions `CODEX_SESSION`, `GEMINI_SESSION`, or Claude-driven ha
 
 ## Gemini Delegation Policy
 
-Use Gemini as a helper, not as the executor of record.
+Use Gemini as a helper, not as the executor of record. Every Gemini call in the CCG workflow must use the bundled preview helper and therefore should open the browser preview automatically unless the user explicitly requested headless execution.
 
 - Backend-heavy tasks: Gemini is optional. Use it for edge-case review, API design alternatives, test ideas, or a second-pass diff review when risk is meaningful.
 - Pure backend/simple tasks: do not spend time delegating unless the plan asks for it or the logic is risky.
@@ -65,6 +67,8 @@ python "<path-to-this-skill>\scripts\invoke_gemini_preview.py" --workdir "<repo-
 ```
 
 Resolve `<path-to-this-skill>` from this `SKILL.md` directory. This helper creates a disposable snapshot of the workspace by default, starts a localhost browser preview, streams Gemini `stream-json` output into the page, and writes the raw output under `~/.codex/ccg/logs/`. It mirrors the original CCG `codeagent-wrapper` Web UI behavior without calling the Claude-side wrapper.
+
+`/ccg:gemini-preview` is a convenience command for manual tests and one-off helper prompts. It does not change the rule above: when `/ccg:plan`, `/ccg:execute`, or `/ccg:review` decides to use Gemini internally, launch this same preview helper directly and let it open the browser.
 
 Gemini prompts must use the bundled standard templates in `templates/gemini/`. They are adapted from the original CCG role prompts and command templates, but rewritten for Codex-native orchestration:
 

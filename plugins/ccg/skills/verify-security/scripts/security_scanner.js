@@ -212,7 +212,7 @@ function isTestPath(filePath) {
     .some((part) => TEST_DIR_NAMES.has(part.toLowerCase()));
 }
 
-function scanFile(filePath, rules, relativePath = filePath) {
+function scanFile(filePath, rules, relativePath = path.basename(filePath)) {
   const findings = [];
   let content;
   try { content = fs.readFileSync(filePath, 'utf-8'); } catch { return findings; }

@@ -5,6 +5,8 @@ description: Run a read-only Gemini helper task with a local browser preview. Us
 
 # CCG Gemini Preview
 
+`/ccg:gemini-preview` is the manual smoke-test and debugging entry for the same browser preview helper used by the rest of the CCG workflow. It is not a special mode that other commands must ask the user to run. Whenever `/ccg:plan`, `/ccg:execute`, or `/ccg:review` calls Gemini internally, they should invoke this helper themselves and open the browser preview automatically.
+
 Use the Gemini preview helper bundled with this plugin:
 `../ccg-executor/scripts/invoke_gemini_preview.py`.
 

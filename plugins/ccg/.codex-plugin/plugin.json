@@ -1,6 +1,6 @@
 {
   "name": "ccg",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "description": "Codex-native CCG workflow planner and executor. Codex creates plans, orchestrates Gemini, applies code, verifies changes, and reports results.",
   "author": {
     "name": "jed-zed",

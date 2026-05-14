@@ -102,6 +102,19 @@ function createFakeGemini(binDir) {
   return scriptPath;
 }
 
+function createFakeGeminiWithoutMarker(binDir) {
+  fs.mkdirSync(binDir, { recursive: true });
+  if (process.platform === "win32") {
+    const scriptPath = path.join(binDir, "gemini.cmd");
+    fs.writeFileSync(scriptPath, "@echo off\r\necho model command exited zero\r\nexit /b 0\r\n", "utf8");
+    return scriptPath;
+  }
+  const scriptPath = path.join(binDir, "gemini");
+  fs.writeFileSync(scriptPath, "#!/bin/sh\necho model command exited zero\nexit 0\n", "utf8");
+  fs.chmodSync(scriptPath, 0o755);
+  return scriptPath;
+}
+
 function initGitRepo() {
   const dir = tempDir("ccg-change-fixture-");
   run("git", ["init"], { cwd: dir });
@@ -573,6 +586,64 @@ print("HAS_WINDOW_CLOSE=" + str("window.close()" in html))
   assert(result.stdout.includes("HAS_WINDOW_CLOSE=True"), `expected preview page to close itself:\n${result.stdout}`);
 });
 
+test("CCG skills require browser preview for every workflow Gemini call", () => {
+  const executorSkill = fs.readFileSync(ccgExecutorSkill, "utf8");
+  const executeSkill = fs.readFileSync(
+    path.join(repoRoot, "plugins", "ccg", "skills", "ccg-execute", "SKILL.md"),
+    "utf8"
+  );
+  const reviewSkill = fs.readFileSync(
+    path.join(repoRoot, "plugins", "ccg", "skills", "ccg-review", "SKILL.md"),
+    "utf8"
+  );
+  const geminiPreviewSkill = fs.readFileSync(
+    path.join(repoRoot, "plugins", "ccg", "skills", "ccg-gemini-preview", "SKILL.md"),
+    "utf8"
+  );
+  const readme = fs.readFileSync(path.join(repoRoot, "README.md"), "utf8");
+
+  for (const [name, text] of [
+    ["executor", executorSkill],
+    ["execute", executeSkill],
+    ["review", reviewSkill],
+  ]) {
+    assert(
+      text.includes("Every Gemini call in the CCG workflow must use the bundled preview helper"),
+      `expected ${name} skill to require the preview helper for every Gemini call`
+    );
+    assert(
+      text.includes("Do not call the raw `gemini`, `gemini.cmd`, or `gemini.exe` CLI directly"),
+      `expected ${name} skill to forbid raw Gemini CLI calls`
+    );
+  }
+
+  assert(
+    geminiPreviewSkill.includes("manual smoke-test and debugging entry"),
+    "expected /ccg:gemini-preview to be documented as a manual smoke/debug entry"
+  );
+  assert(
+    readme.includes("`/ccg:gemini-preview` is only the manual smoke-test/debug entry"),
+    "expected README to clarify that workflow Gemini calls open the preview automatically"
+  );
+});
+
+test("verify-security scanFile defaults test-path checks to the file basename", () => {
+  const root = tempDir("ccg-security-scanfile-test-");
+  const filePath = path.join(root, "test", "project", "src", "app.js");
+  writeFile(filePath, "document.body.innerHTML = userInput;\n");
+  const snippet = `
+const scanner = require(process.argv[1]);
+const findings = scanner.scanFile(process.argv[2], scanner.SECURITY_RULES);
+console.log(JSON.stringify(findings));
+`;
+  const result = run(node, ["-e", snippet, securityScanner, filePath]);
+  const findings = parseJsonOutput(result);
+  assert(
+    findings.some((finding) => finding.category === "XSS"),
+    "expected direct scanFile calls to avoid parent test-directory false positives"
+  );
+});
+
 test("sync-local-plugin-cache WhatIf does not create cache files", () => {
   const codexHome = tempDir("ccg-sync-codex-");
   const pluginRoot = tempDir("ccg-sync-plugin-");
@@ -868,6 +939,45 @@ test("doctor can optionally check Gemini model availability", () => {
       (check) => check.name === "Gemini model available: fixture-model" && check.status === "PASS"
     ),
     "expected optional Gemini model availability check to pass with fake Gemini"
+  );
+});
+
+test("doctor warns when Gemini model probe exits zero without marker", () => {
+  const codexHome = tempDir("ccg-doctor-model-marker-codex-");
+  const fakeBin = tempDir("ccg-doctor-model-marker-bin-");
+  const version = realPluginVersion();
+  const cacheRoot = path.join(codexHome, "plugins", "cache", "ccg-codex-workflow", "ccg", version);
+  fs.cpSync(realPluginRoot, cacheRoot, { recursive: true });
+  createFakeGeminiWithoutMarker(fakeBin);
+
+  const result = run(
+    powershell,
+    [
+      "-NoProfile",
+      "-ExecutionPolicy",
+      "Bypass",
+      "-File",
+      pluginDoctor,
+      "-CodexHome",
+      codexHome,
+      "-PluginRoot",
+      realPluginRoot,
+      "-CheckGeminiModel",
+      "-GeminiModel",
+      "fixture-model",
+      "-Json",
+    ],
+    {
+      allowFailure: true,
+      env: { PATH: `${fakeBin}${path.delimiter}${process.env.PATH || ""}` },
+    }
+  );
+  const json = parseJsonOutput(result);
+  assert(
+    json.checks.some(
+      (check) => check.name === "Gemini model available: fixture-model" && check.status === "WARN"
+    ),
+    "expected missing marker to warn even when Gemini CLI exits zero"
   );
 });
 

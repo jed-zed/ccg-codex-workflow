@@ -117,6 +117,13 @@ function validateGeminiTemplates() {
   if (!executorSkill.includes("--prompt-template")) {
     fail("ccg-executor skill must document Gemini prompt templates");
   }
+  for (const phrase of [
+    "Every Gemini call in the CCG workflow must use the bundled preview helper",
+    "Do not call the raw `gemini`, `gemini.cmd`, or `gemini.exe` CLI directly",
+    "/ccg:gemini-preview` is only a manual smoke-test/debug entry",
+  ]) {
+    if (!executorSkill.includes(phrase)) fail(`ccg-executor skill is missing preview-helper rule: ${phrase}`);
+  }
   console.log("gemini templates ok");
 }
 
@@ -134,7 +141,13 @@ function validateDoctorFixDocs() {
   }
 
   const doctorScript = fs.readFileSync(path.join(repoRoot, "plugins/ccg/scripts/doctor.ps1"), "utf8");
-  for (const phrase of ["[switch]$Fix", "[switch]$CheckGeminiModel", "ShouldProcess", "sync-local-plugin-cache.ps1"]) {
+  for (const phrase of [
+    "[switch]$Fix",
+    "[switch]$CheckGeminiModel",
+    "ShouldProcess",
+    "sync-local-plugin-cache.ps1",
+    "CCG_DOCTOR_MODEL_OK",
+  ]) {
     if (!doctorScript.includes(phrase)) fail(`doctor.ps1 is missing fix implementation phrase: ${phrase}`);
   }
 
@@ -147,6 +160,9 @@ function validateDoctorFixDocs() {
 
 function validateCiActions() {
   const workflow = fs.readFileSync(path.join(repoRoot, ".github/workflows/ci.yml"), "utf8");
+  for (const phrase of ["strategy:", "matrix:", "ubuntu-latest", "windows-latest"]) {
+    if (!workflow.includes(phrase)) fail(`CI workflow must include cross-platform matrix phrase: ${phrase}`);
+  }
   for (const action of ["actions/checkout@v6", "actions/setup-node@v6", "actions/setup-python@v6"]) {
     if (!workflow.includes(action)) fail(`CI workflow must use Node 24-compatible action: ${action}`);
   }

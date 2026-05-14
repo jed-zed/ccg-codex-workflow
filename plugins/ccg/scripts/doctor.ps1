@@ -429,10 +429,14 @@ if ($geminiCommand) {
       "-p", "Return exactly CCG_DOCTOR_MODEL_OK."
     )
     $modelCheck = Invoke-CapturedCommand $geminiCommand.Source $modelArgs
-    if ($modelCheck.ok) {
+    if ($modelCheck.ok -and $modelCheck.output -match "CCG_DOCTOR_MODEL_OK") {
       Add-Check "Gemini model available: $GeminiModel" "PASS" (Limit-Text $modelCheck.output)
     } else {
-      Add-Check "Gemini model available: $GeminiModel" "WARN" (Limit-Text $modelCheck.output) "Check Gemini account permissions, model name, region, or use GEMINI_MODEL/--model override."
+      $detail = Limit-Text $modelCheck.output
+      if ($modelCheck.ok -and $modelCheck.output -notmatch "CCG_DOCTOR_MODEL_OK") {
+        $detail = "Gemini CLI exited 0 but did not return CCG_DOCTOR_MODEL_OK. Output: $detail"
+      }
+      Add-Check "Gemini model available: $GeminiModel" "WARN" $detail "Check Gemini account permissions, model name, region, or use GEMINI_MODEL/--model override."
     }
   }
 } else {

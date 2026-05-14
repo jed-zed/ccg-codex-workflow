@@ -193,6 +193,8 @@ Ask Gemini for bounded help with a browser preview:
 /ccg:gemini-preview Review this plan for missing backend edge cases
 ```
 
+`/ccg:gemini-preview` is only the manual smoke-test/debug entry. Normal CCG workflow commands do not require the user to type it first: whenever `/ccg:plan`, `/ccg:execute`, or `/ccg:review` calls Gemini internally, it must invoke the bundled preview helper itself and open the browser preview automatically.
+
 Detached Gemini calls also open the browser preview automatically. If Windows blocks focus or popup behavior, use the printed `CCG_GEMINI_PREVIEW_URL`; successful launches print `CCG_GEMINI_BROWSER_OPENED=1`.
 
 Run quality gates:

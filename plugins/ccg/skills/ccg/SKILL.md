@@ -20,7 +20,7 @@ If the user provided no argument, answer in Chinese with the CCG command index:
 - `/ccg:codex-exec <plan>` - explicit Codex-led execution alias.
 - `/ccg:excute <plan>` - typo-compatible alias.
 - `/ccg:review [plan-or-diff]` - review a CCG implementation.
-- `/ccg:gemini-preview <prompt>` - run a read-only Gemini helper task with browser preview.
+- `/ccg:gemini-preview <prompt>` - manual smoke-test/debug entry for the same browser preview helper used automatically by CCG workflow Gemini calls.
 - `/ccg:gen-docs <module-path>` - generate README/DESIGN skeletons for a new module.
 - `/ccg:verify-change` - analyze change impact and documentation sync.
 - `/ccg:verify-module <module-path>` - check module structure and required documentation.
@@ -29,4 +29,4 @@ If the user provided no argument, answer in Chinese with the CCG command index:
 
 If the user provided a plan path or task, treat it as `/ccg:execute`.
 
-Core rule: Codex plans and executes; Gemini assists with bounded read-only planning analysis, drafts, tests, edge cases, UI prototypes, or review; Codex applies final edits, verifies, and reports in Chinese.
+Core rule: Codex plans and executes; Gemini assists with bounded read-only planning analysis, drafts, tests, edge cases, UI prototypes, or review; Codex applies final edits, verifies, and reports in Chinese. Whenever any CCG workflow uses Gemini, it must invoke the bundled browser preview helper automatically rather than asking the user to run `/ccg:gemini-preview` manually.
