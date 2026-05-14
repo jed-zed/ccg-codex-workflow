@@ -79,6 +79,11 @@ Gemini prompts must use the bundled standard templates in `templates/gemini/`. T
 | `prototype` | Draft implementation as a Unified Diff Patch |
 | `review` | Bounded second-pass code review |
 | `frontend` | UI, UX, accessibility, responsive, and component review |
+| `analyzer` | Read-only architecture, codebase, risk, and option analysis |
+| `architect` | Backend/API/data-flow architecture alternatives |
+| `debugger` | Root-cause hypotheses, reproduction strategy, and regression tests |
+| `optimizer` | Performance, reliability, complexity, and maintainability tradeoffs |
+| `tester` | Edge cases, fixture strategy, and test-gap review |
 
 Use `--prompt-template <name>` for every Gemini helper call. Use `--prompt-template none` only for debugging the helper itself.
 

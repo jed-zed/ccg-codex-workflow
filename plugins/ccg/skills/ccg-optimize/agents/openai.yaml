@@ -1,0 +1,3 @@
+display_name: CCG Optimize
+short_description: Optimize code or workflow bottlenecks with measured changes.
+default_prompt: /ccg:optimize Optimize this path

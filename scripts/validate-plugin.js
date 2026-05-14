@@ -7,6 +7,20 @@ const { spawnSync } = require("child_process");
 
 const repoRoot = path.resolve(__dirname, "..");
 const node = process.execPath;
+const phaseOneCommands = ["feat", "frontend", "backend", "analyze", "debug", "optimize", "test", "enhance"];
+const geminiTemplates = [
+  "base",
+  "general",
+  "plan",
+  "prototype",
+  "review",
+  "frontend",
+  "analyzer",
+  "architect",
+  "debugger",
+  "optimizer",
+  "tester",
+];
 
 function fail(message) {
   throw new Error(message);
@@ -100,7 +114,7 @@ function validateGeminiDefaults() {
 
 function validateGeminiTemplates() {
   const templateDir = path.join(repoRoot, "plugins/ccg/skills/ccg-executor/templates/gemini");
-  for (const name of ["base", "general", "plan", "prototype", "review", "frontend"]) {
+  for (const name of geminiTemplates) {
     const file = path.join(templateDir, `${name}.md`);
     if (!fs.existsSync(file)) fail(`missing Gemini prompt template: ${name}.md`);
   }
@@ -115,6 +129,11 @@ function validateGeminiTemplates() {
     "window.close()",
     "--no-auto-close-browser",
     "extract_event_text",
+    "analyzer",
+    "architect",
+    "debugger",
+    "optimizer",
+    "tester",
     "--max-snapshot-bytes",
     "--files-from",
     "events",
@@ -135,6 +154,73 @@ function validateGeminiTemplates() {
     if (!executorSkill.includes(phrase)) fail(`ccg-executor skill is missing preview-helper rule: ${phrase}`);
   }
   console.log("gemini templates ok");
+}
+
+function validateOriginalCcgParityPhaseOne() {
+  const matrixPath = path.join(repoRoot, "docs/original-ccg-parity-matrix.md");
+  if (!fs.existsSync(matrixPath)) fail("missing original CCG parity matrix");
+  const matrix = fs.readFileSync(matrixPath, "utf8");
+  for (const command of [
+    "workflow",
+    "plan",
+    "execute",
+    "feat",
+    "frontend",
+    "backend",
+    "analyze",
+    "debug",
+    "optimize",
+    "test",
+    "enhance",
+    "spec-init",
+    "team-review",
+    "codeagent-wrapper",
+  ]) {
+    if (!matrix.includes(`/ccg:${command}`) && command !== "codeagent-wrapper") {
+      fail(`parity matrix is missing command: ${command}`);
+    }
+    if (command === "codeagent-wrapper" && !matrix.includes(command)) {
+      fail("parity matrix must explain codeagent-wrapper is not copied");
+    }
+  }
+
+  const ccgCommand = fs.readFileSync(path.join(repoRoot, "plugins/ccg/commands/ccg.md"), "utf8");
+  const ccgSkill = fs.readFileSync(path.join(repoRoot, "plugins/ccg/skills/ccg/SKILL.md"), "utf8");
+  const readme = fs.readFileSync(path.join(repoRoot, "README.md"), "utf8");
+  const bridge = fs.readFileSync(path.join(repoRoot, "scripts/install-codex-command-bridge.ps1"), "utf8");
+  const doctor = fs.readFileSync(path.join(repoRoot, "plugins/ccg/scripts/doctor.ps1"), "utf8");
+
+  for (const command of phaseOneCommands) {
+    for (const file of [
+      `plugins/ccg/commands/${command}.md`,
+      `plugins/ccg/skills/ccg-${command}/SKILL.md`,
+      `plugins/ccg/skills/ccg-${command}/agents/openai.yaml`,
+    ]) {
+      if (!fs.existsSync(path.join(repoRoot, file))) fail(`missing phase-one command file: ${file}`);
+    }
+    for (const [name, text] of [
+      ["ccg command index", ccgCommand],
+      ["ccg skill index", ccgSkill],
+      ["README", readme],
+      ["bridge installer", bridge],
+      ["doctor script", doctor],
+      ["parity matrix", matrix],
+    ]) {
+      if (!text.includes(`/ccg:${command}`) && !text.includes(`${command}.md`) && !text.includes(`ccg-${command}`)) {
+        fail(`${name} is missing phase-one command: ${command}`);
+      }
+    }
+  }
+
+  const frontendSkill = fs.readFileSync(path.join(repoRoot, "plugins/ccg/skills/ccg-frontend/SKILL.md"), "utf8");
+  if (!frontendSkill.includes("--prompt-template frontend")) {
+    fail("ccg-frontend must require the frontend Gemini template for substantial UI work");
+  }
+  const backendSkill = fs.readFileSync(path.join(repoRoot, "plugins/ccg/skills/ccg-backend/SKILL.md"), "utf8");
+  if (!backendSkill.includes("Gemini is optional")) {
+    fail("ccg-backend must keep Gemini optional for simple backend work");
+  }
+  console.log(`original CCG phase-one parity ok - ${phaseOneCommands.length} command(s)`);
 }
 
 function validatePlanLanguageContract() {
@@ -255,6 +341,7 @@ function main() {
   validateScripts();
   validateGeminiDefaults();
   validateGeminiTemplates();
+  validateOriginalCcgParityPhaseOne();
   validatePlanLanguageContract();
   validateReleaseDocs();
   validateDoctorFixDocs();

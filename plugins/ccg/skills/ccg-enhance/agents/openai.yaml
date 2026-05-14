@@ -1,0 +1,3 @@
+display_name: CCG Enhance
+short_description: Improve existing features while preserving behavior.
+default_prompt: /ccg:enhance Improve this feature

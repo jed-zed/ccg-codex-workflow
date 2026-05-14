@@ -210,6 +210,19 @@ function Convert-BytesToHex {
   return -join ($Bytes | ForEach-Object { $_.ToString("x2") })
 }
 
+function Get-FileSha256Hex {
+  param([string]$Path)
+
+  $stream = [System.IO.File]::OpenRead($Path)
+  $sha = [System.Security.Cryptography.SHA256]::Create()
+  try {
+    return Convert-BytesToHex ($sha.ComputeHash($stream))
+  } finally {
+    $sha.Dispose()
+    $stream.Dispose()
+  }
+}
+
 function Get-TreeDigest {
   param([string]$Root)
 
@@ -226,7 +239,7 @@ function Get-TreeDigest {
       continue
     }
 
-    $hash = (Get-FileHash -LiteralPath $file.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+    $hash = Get-FileSha256Hex $file.FullName
     $entries += "$relativePath=$hash"
   }
 
@@ -297,12 +310,41 @@ $skillsDir = Join-Path $PluginRoot "skills"
 Test-PathExists "plugin commands directory" $commandsDir "Restore plugins\ccg\commands from the repository." | Out-Null
 Test-PathExists "plugin skills directory" $skillsDir "Restore plugins\ccg\skills from the repository." | Out-Null
 
-foreach ($commandName in @("ccg.md", "plan.md", "execute.md", "doctor.md", "gemini-preview.md", "verify-change.md")) {
+foreach ($commandName in @(
+  "ccg.md",
+  "plan.md",
+  "execute.md",
+  "feat.md",
+  "frontend.md",
+  "backend.md",
+  "analyze.md",
+  "debug.md",
+  "optimize.md",
+  "test.md",
+  "enhance.md",
+  "doctor.md",
+  "gemini-preview.md",
+  "verify-change.md"
+)) {
   $commandPath = Join-Path $commandsDir $commandName
   Test-PathExists "plugin command: $commandName" $commandPath "Restore or regenerate plugin command files." | Out-Null
 }
 
-foreach ($skillName in @("ccg-plan", "ccg-execute", "ccg-doctor", "ccg-gemini-preview", "verify-change")) {
+foreach ($skillName in @(
+  "ccg-plan",
+  "ccg-execute",
+  "ccg-feat",
+  "ccg-frontend",
+  "ccg-backend",
+  "ccg-analyze",
+  "ccg-debug",
+  "ccg-optimize",
+  "ccg-test",
+  "ccg-enhance",
+  "ccg-doctor",
+  "ccg-gemini-preview",
+  "verify-change"
+)) {
   $skillPath = Join-PathMany $skillsDir $skillName "SKILL.md"
   Test-PathExists "plugin skill: $skillName" $skillPath "Restore or reinstall the CCG plugin skills." | Out-Null
 }
@@ -329,8 +371,14 @@ if (Test-Path -LiteralPath $cacheRoot) {
   foreach ($relativePath in @(
     ".codex-plugin\plugin.json",
     "commands\plan.md",
+    "commands\feat.md",
+    "commands\frontend.md",
+    "commands\backend.md",
     "commands\doctor.md",
     "skills\ccg-plan\SKILL.md",
+    "skills\ccg-feat\SKILL.md",
+    "skills\ccg-frontend\SKILL.md",
+    "skills\ccg-backend\SKILL.md",
     "skills\ccg-doctor\SKILL.md",
     "skills\ccg-executor\scripts\invoke_gemini_preview.py",
     "scripts\doctor.ps1"
@@ -338,7 +386,21 @@ if (Test-Path -LiteralPath $cacheRoot) {
     Test-CacheKeyFile $relativePath $cacheRoot
   }
 
-  foreach ($skillName in @("ccg-plan", "ccg-execute", "ccg-doctor", "ccg-gemini-preview", "verify-change")) {
+  foreach ($skillName in @(
+    "ccg-plan",
+    "ccg-execute",
+    "ccg-feat",
+    "ccg-frontend",
+    "ccg-backend",
+    "ccg-analyze",
+    "ccg-debug",
+    "ccg-optimize",
+    "ccg-test",
+    "ccg-enhance",
+    "ccg-doctor",
+    "ccg-gemini-preview",
+    "verify-change"
+  )) {
     $cachedSkill = Join-PathMany $cacheRoot "skills" $skillName "SKILL.md"
     Test-PathExists "cached skill: $skillName" $cachedSkill "Run 'codex plugin marketplace add <repo-path>' and restart Codex." | Out-Null
   }
@@ -371,7 +433,21 @@ if ($codexCommand) {
   Add-Check "codex debug prompt-input" "SKIP" "codex CLI is unavailable."
 }
 
-foreach ($skill in @("ccg:plan", "ccg:execute", "ccg:doctor", "ccg:gemini-preview", "ccg:verify-change")) {
+foreach ($skill in @(
+  "ccg:plan",
+  "ccg:execute",
+  "ccg:feat",
+  "ccg:frontend",
+  "ccg:backend",
+  "ccg:analyze",
+  "ccg:debug",
+  "ccg:optimize",
+  "ccg:test",
+  "ccg:enhance",
+  "ccg:doctor",
+  "ccg:gemini-preview",
+  "ccg:verify-change"
+)) {
   Test-PromptSkill $skill $promptInputOutput
 }
 
@@ -398,6 +474,14 @@ Test-BridgeFile "ccg.md" (Join-Path $commandsRoot "ccg.md")
 $bridgeCommandDir = Join-Path $commandsRoot "ccg"
 Test-BridgeFile "ccg\plan.md" (Join-Path $bridgeCommandDir "plan.md")
 Test-BridgeFile "ccg\execute.md" (Join-Path $bridgeCommandDir "execute.md")
+Test-BridgeFile "ccg\feat.md" (Join-Path $bridgeCommandDir "feat.md")
+Test-BridgeFile "ccg\frontend.md" (Join-Path $bridgeCommandDir "frontend.md")
+Test-BridgeFile "ccg\backend.md" (Join-Path $bridgeCommandDir "backend.md")
+Test-BridgeFile "ccg\analyze.md" (Join-Path $bridgeCommandDir "analyze.md")
+Test-BridgeFile "ccg\debug.md" (Join-Path $bridgeCommandDir "debug.md")
+Test-BridgeFile "ccg\optimize.md" (Join-Path $bridgeCommandDir "optimize.md")
+Test-BridgeFile "ccg\test.md" (Join-Path $bridgeCommandDir "test.md")
+Test-BridgeFile "ccg\enhance.md" (Join-Path $bridgeCommandDir "enhance.md")
 Test-BridgeFile "ccg\doctor.md" (Join-Path $bridgeCommandDir "doctor.md")
 Test-BridgeFile "ccg\gemini-preview.md" (Join-Path $bridgeCommandDir "gemini-preview.md")
 

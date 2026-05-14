@@ -187,6 +187,20 @@ const ccgPlanSkill = path.join(repoRoot, "plugins", "ccg", "skills", "ccg-plan",
 const ccgExecutorSkill = path.join(repoRoot, "plugins", "ccg", "skills", "ccg-executor", "SKILL.md");
 const ccgDoctorSkill = path.join(repoRoot, "plugins", "ccg", "skills", "ccg-doctor", "SKILL.md");
 const realPluginRoot = path.join(repoRoot, "plugins", "ccg");
+const phaseOneCommands = ["feat", "frontend", "backend", "analyze", "debug", "optimize", "test", "enhance"];
+const extendedGeminiTemplates = [
+  "base",
+  "general",
+  "plan",
+  "prototype",
+  "review",
+  "frontend",
+  "analyzer",
+  "architect",
+  "debugger",
+  "optimizer",
+  "tester",
+];
 
 function createMinimalCcgPlugin(root, version = "9.9.9") {
   writeFile(
@@ -614,7 +628,7 @@ print("CLI=" + module.parse_args().model)
 });
 
 test("Gemini prompt templates are bundled and referenced", () => {
-  for (const name of ["base", "general", "plan", "prototype", "review", "frontend"]) {
+  for (const name of extendedGeminiTemplates) {
     const file = path.join(geminiTemplateDir, `${name}.md`);
     assert(fs.existsSync(file), `expected bundled Gemini prompt template ${name}.md`);
   }
@@ -626,6 +640,9 @@ test("Gemini prompt templates are bundled and referenced", () => {
   assert(prototype.includes("Unified Diff Patch"), "expected prototype template to request unified diff patches");
   const executorSkill = fs.readFileSync(ccgExecutorSkill, "utf8");
   assert(executorSkill.includes("--prompt-template"), "expected executor skill to document prompt templates");
+  for (const name of ["analyzer", "architect", "debugger", "optimizer", "tester"]) {
+    assert(executorSkill.includes(`\`${name}\``), `expected executor skill to document ${name} template`);
+  }
 });
 
 test("Gemini preview helper defaults to templates and browser auto-close", () => {
@@ -706,6 +723,68 @@ test("CCG skills require browser preview for every workflow Gemini call", () => 
     readme.includes("`/ccg:gemini-preview` is only the manual smoke-test/debug entry"),
     "expected README to clarify that workflow Gemini calls open the preview automatically"
   );
+});
+
+test("original CCG phase-one commands have command, skill, agent, and index coverage", () => {
+  const ccgCommand = fs.readFileSync(path.join(repoRoot, "plugins", "ccg", "commands", "ccg.md"), "utf8");
+  const ccgSkill = fs.readFileSync(path.join(repoRoot, "plugins", "ccg", "skills", "ccg", "SKILL.md"), "utf8");
+  const readme = fs.readFileSync(path.join(repoRoot, "README.md"), "utf8");
+  const bridge = fs.readFileSync(path.join(repoRoot, "scripts", "install-codex-command-bridge.ps1"), "utf8");
+  const doctor = fs.readFileSync(pluginDoctor, "utf8");
+  const parityMatrix = fs.readFileSync(path.join(repoRoot, "docs", "original-ccg-parity-matrix.md"), "utf8");
+
+  for (const command of phaseOneCommands) {
+    assert(
+      fs.existsSync(path.join(repoRoot, "plugins", "ccg", "commands", `${command}.md`)),
+      `expected /ccg:${command} command file`
+    );
+    assert(
+      fs.existsSync(path.join(repoRoot, "plugins", "ccg", "skills", `ccg-${command}`, "SKILL.md")),
+      `expected ccg-${command} skill`
+    );
+    assert(
+      fs.existsSync(path.join(repoRoot, "plugins", "ccg", "skills", `ccg-${command}`, "agents", "openai.yaml")),
+      `expected ccg-${command} agent prompt`
+    );
+    assert(ccgCommand.includes(`/ccg:${command}`), `expected command index to include /ccg:${command}`);
+    assert(ccgSkill.includes(`/ccg:${command}`), `expected skill index to include /ccg:${command}`);
+    assert(readme.includes(`/ccg:${command}`), `expected README to include /ccg:${command}`);
+    assert(bridge.includes(`${command}.md`), `expected bridge installer to include ${command}.md`);
+    assert(
+      doctor.includes(`${command}.md`) || doctor.includes(`ccg-${command}`) || doctor.includes(`ccg:${command}`),
+      `expected doctor diagnostics to include ${command}`
+    );
+    assert(parityMatrix.includes(`/ccg:${command}`), `expected parity matrix to include /ccg:${command}`);
+  }
+});
+
+test("phase-one command semantics preserve Codex and Gemini boundaries", () => {
+  const frontend = fs.readFileSync(path.join(repoRoot, "plugins", "ccg", "skills", "ccg-frontend", "SKILL.md"), "utf8");
+  const backend = fs.readFileSync(path.join(repoRoot, "plugins", "ccg", "skills", "ccg-backend", "SKILL.md"), "utf8");
+  const analyze = fs.readFileSync(path.join(repoRoot, "plugins", "ccg", "skills", "ccg-analyze", "SKILL.md"), "utf8");
+  const debug = fs.readFileSync(path.join(repoRoot, "plugins", "ccg", "skills", "ccg-debug", "SKILL.md"), "utf8");
+  const testSkill = fs.readFileSync(path.join(repoRoot, "plugins", "ccg", "skills", "ccg-test", "SKILL.md"), "utf8");
+
+  assert(frontend.includes("--prompt-template frontend"), "expected frontend skill to use frontend Gemini template");
+  assert(frontend.includes("Codex must adapt Gemini output"), "expected Codex ownership in frontend skill");
+  assert(backend.includes("Gemini is optional"), "expected backend skill to keep Gemini optional");
+  assert(analyze.includes("read-only"), "expected analyze skill to remain read-only");
+  assert(debug.includes("Reproduce"), "expected debug skill to require reproduction");
+  assert(testSkill.includes("--prompt-template tester"), "expected test skill to use tester Gemini template");
+});
+
+test("original CCG parity matrix tracks later phases and non-copied wrapper behavior", () => {
+  const matrix = fs.readFileSync(path.join(repoRoot, "docs", "original-ccg-parity-matrix.md"), "utf8");
+  for (const phrase of [
+    "/ccg:spec-init",
+    "/ccg:team-review",
+    "/ccg:commit",
+    "codeagent-wrapper",
+    "not-copied",
+    "SESSION_ID",
+  ]) {
+    assert(matrix.includes(phrase), `expected parity matrix to include ${phrase}`);
+  }
 });
 
 test("verify-security scanFile defaults test-path checks to the file basename", () => {
