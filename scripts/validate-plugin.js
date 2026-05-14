@@ -44,6 +44,7 @@ function validateScripts() {
   const files = [
     "scripts/doctor.ps1",
     "scripts/sync-local-plugin-cache.ps1",
+    "plugins/ccg/scripts/sync-local-plugin-cache.ps1",
     "plugins/ccg/scripts/doctor.ps1",
     "plugins/ccg/commands/doctor.md",
     "plugins/ccg/skills/ccg-doctor/SKILL.md",
@@ -97,6 +98,24 @@ function validateGeminiDefaults() {
   console.log("gemini defaults ok");
 }
 
+function validateDoctorFixDocs() {
+  const doctorSkill = fs.readFileSync(path.join(repoRoot, "plugins/ccg/skills/ccg-doctor/SKILL.md"), "utf8");
+  for (const phrase of ["--fix", "source checkout", "read-only", "sync-local-plugin-cache.ps1"]) {
+    if (!doctorSkill.includes(phrase)) fail(`ccg-doctor skill is missing fix guidance phrase: ${phrase}`);
+  }
+
+  const doctorScript = fs.readFileSync(path.join(repoRoot, "plugins/ccg/scripts/doctor.ps1"), "utf8");
+  for (const phrase of ["[switch]$Fix", "ShouldProcess", "sync-local-plugin-cache.ps1"]) {
+    if (!doctorScript.includes(phrase)) fail(`doctor.ps1 is missing fix implementation phrase: ${phrase}`);
+  }
+
+  const bridgeScript = fs.readFileSync(path.join(repoRoot, "scripts/install-codex-command-bridge.ps1"), "utf8");
+  if (!bridgeScript.includes("SupportsShouldProcess")) {
+    fail("install-codex-command-bridge.ps1 must support -WhatIf diagnostics");
+  }
+  console.log("doctor fix docs ok");
+}
+
 function validateSkills() {
   const skillsDir = path.join(repoRoot, "plugins", "ccg", "skills");
   const skillFiles = walk(skillsDir, (file) => path.basename(file) === "SKILL.md");
@@ -129,6 +148,7 @@ function main() {
   validateJson();
   validateScripts();
   validateGeminiDefaults();
+  validateDoctorFixDocs();
   validateSkills();
   nodeCheck();
 }

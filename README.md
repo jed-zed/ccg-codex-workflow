@@ -67,7 +67,13 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\sync-local-plugin-
 
 The sync script refreshes only this plugin's current versioned cache directory under `~/.codex/plugins/cache/ccg-codex-workflow/ccg/<version>`. It does not edit `config.toml`, install the optional command bridge, or call Gemini. Restart the current Codex TUI session after syncing.
 
-`doctor.ps1` compares the source plugin with the cached plugin. A stale-cache warning means the source and cache differ; run the sync script and restart Codex.
+`doctor.ps1` compares the source plugin with the cached plugin. A stale-cache warning means the source and cache differ; run the sync script and restart Codex. From a source checkout, you can also ask doctor to refresh only the plugin cache:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\doctor.ps1 -Fix -Verbose
+```
+
+`-Fix` does not install command bridge files and does not edit other Codex configuration. It uses the plugin-bundled `scripts\sync-local-plugin-cache.ps1` as the source of truth.
 
 For machine-readable output:
 
@@ -118,6 +124,7 @@ This repository keeps command markdown files under `plugins/ccg/commands/` so fu
 The optional bridge below copies thin command stubs into `~/.codex/commands`. Use it only for Codex builds that support user-command discovery; on builds that do not, it is harmless but will not make `/ccg:*` appear in autocomplete:
 
 ```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\install-codex-command-bridge.ps1 -WhatIf
 powershell -ExecutionPolicy Bypass -File .\scripts\install-codex-command-bridge.ps1
 ```
 
@@ -129,6 +136,8 @@ This copies thin command stubs into:
 ```
 
 The plugin remains the source of truth; the bridge is only a compatibility layer for clients that already support local command discovery.
+
+Codex CLI 0.130 exposes prompt-visible skills through `codex debug prompt-input`, but it does not expose a public command-registry debug command. Doctor can prove skills and bridge files are present; it cannot prove TUI slash autocomplete.
 
 To remove the bridge:
 
@@ -142,6 +151,12 @@ Diagnose the local plugin install:
 
 ```text
 /ccg:doctor
+```
+
+From this repository's source checkout, repair a stale local plugin cache:
+
+```text
+/ccg:doctor --fix
 ```
 
 Create a Codex-native CCG plan:

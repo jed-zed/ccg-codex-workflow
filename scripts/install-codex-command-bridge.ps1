@@ -1,3 +1,4 @@
+[CmdletBinding(SupportsShouldProcess = $true, ConfirmImpact = "Medium")]
 param(
   [string]$CodexHome = $env:CODEX_HOME,
   [string]$PluginRoot = ""
@@ -22,7 +23,9 @@ if (-not (Test-Path -LiteralPath $sourceCommands)) {
 
 $commandsRoot = Join-Path $CodexHome "commands"
 $ccgNamespace = Join-Path $commandsRoot "ccg"
-New-Item -ItemType Directory -Path $ccgNamespace -Force | Out-Null
+if ($PSCmdlet.ShouldProcess($ccgNamespace, "Create command bridge directory")) {
+  New-Item -ItemType Directory -Path $ccgNamespace -Force | Out-Null
+}
 
 function Copy-Command {
   param(
@@ -33,8 +36,13 @@ function Copy-Command {
   if (-not (Test-Path -LiteralPath $sourcePath)) {
     throw "Missing command source: $sourcePath"
   }
-  Copy-Item -LiteralPath $sourcePath -Destination $DestinationPath -Force
-  Write-Output "installed $DestinationPath"
+  Write-Output "bridge target $DestinationPath"
+  if ($PSCmdlet.ShouldProcess($DestinationPath, "Install command bridge file from $sourcePath")) {
+    $destinationDir = Split-Path -Parent $DestinationPath
+    New-Item -ItemType Directory -Path $destinationDir -Force | Out-Null
+    Copy-Item -LiteralPath $sourcePath -Destination $DestinationPath -Force
+    Write-Output "installed $DestinationPath"
+  }
 }
 
 # Bare /ccg index for Codex versions that load user root commands.
@@ -57,6 +65,10 @@ Copy-Command "verify-quality.md" (Join-Path $ccgNamespace "verify-quality.md")
 Copy-Command "verify-security.md" (Join-Path $ccgNamespace "verify-security.md")
 
 Write-Output ""
-Write-Output "CCG command bridge installed under $commandsRoot"
+if ($WhatIfPreference) {
+  Write-Output "CCG command bridge dry run completed for $commandsRoot"
+} else {
+  Write-Output "CCG command bridge installed under $commandsRoot"
+}
 Write-Output "Restart Codex TUI to reload local files."
 Write-Output "Note: Codex CLI 0.130 may not surface custom command autocomplete. If /ccg:* is not shown, type /ccg:doctor, /ccg:plan, or /ccg:execute as normal prompt text."

@@ -1,7 +1,8 @@
-[CmdletBinding()]
+[CmdletBinding(SupportsShouldProcess = $true, ConfirmImpact = "Medium")]
 param(
   [string]$CodexHome = $env:CODEX_HOME,
   [string]$PluginRoot = "",
+  [switch]$Fix,
   [switch]$Json
 )
 
@@ -232,6 +233,28 @@ $PluginRoot = [System.IO.Path]::GetFullPath($PluginRoot)
 
 Add-Check "codex home" "PASS" $CodexHome
 Add-Check "plugin root" "PASS" $PluginRoot
+$fixDryRun = $Fix -and $WhatIfPreference
+
+if ($Fix) {
+  $syncScript = Join-PathMany $PluginRoot "scripts" "sync-local-plugin-cache.ps1"
+  if (-not (Test-Path -LiteralPath $syncScript)) {
+    Add-Check "plugin cache fix" "FAIL" "Missing: $syncScript" "Restore plugins\ccg\scripts\sync-local-plugin-cache.ps1 and rerun doctor with -Fix."
+  } else {
+    $syncArguments = @{
+      CodexHome = $CodexHome
+      PluginRoot = $PluginRoot
+    }
+    if ($WhatIfPreference) {
+      $syncArguments["WhatIf"] = $true
+    }
+    try {
+      $syncOutput = & $syncScript @syncArguments 2>&1 | Out-String
+      Add-Check "plugin cache fix" "PASS" $syncOutput.Trim()
+    } catch {
+      Add-Check "plugin cache fix" "FAIL" $_.Exception.Message "Run scripts\sync-local-plugin-cache.ps1 manually from the source checkout and restart Codex."
+    }
+  }
+}
 
 $codexCommand = Get-Command "codex" -ErrorAction SilentlyContinue
 if ($codexCommand) {
@@ -310,7 +333,11 @@ if (Test-Path -LiteralPath $cacheRoot) {
     Add-Check "plugin cache freshness" "WARN" "source=$sourceDigest cache=$cacheDigest" "Run scripts\sync-local-plugin-cache.ps1 and restart the current Codex TUI session."
   }
 } else {
-  Add-Check "plugin cache" "FAIL" "Missing: $cacheRoot" "Run 'codex plugin marketplace add <repo-path>' and restart Codex."
+  if ($fixDryRun) {
+    Add-Check "plugin cache" "WARN" "Missing after -Fix -WhatIf dry run: $cacheRoot" "Run doctor with -Fix without -WhatIf to refresh the cache, then restart Codex."
+  } else {
+    Add-Check "plugin cache" "FAIL" "Missing: $cacheRoot" "Run 'codex plugin marketplace add <repo-path>' and restart Codex."
+  }
 }
 
 $promptInputOutput = ""
