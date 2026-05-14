@@ -210,6 +210,19 @@ function Convert-BytesToHex {
   return -join ($Bytes | ForEach-Object { $_.ToString("x2") })
 }
 
+function Get-FileSha256Hex {
+  param([string]$Path)
+
+  $stream = [System.IO.File]::OpenRead($Path)
+  $sha = [System.Security.Cryptography.SHA256]::Create()
+  try {
+    return Convert-BytesToHex ($sha.ComputeHash($stream))
+  } finally {
+    $sha.Dispose()
+    $stream.Dispose()
+  }
+}
+
 function Get-TreeDigest {
   param([string]$Root)
 
@@ -226,7 +239,7 @@ function Get-TreeDigest {
       continue
     }
 
-    $hash = (Get-FileHash -LiteralPath $file.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+    $hash = Get-FileSha256Hex $file.FullName
     $entries += "$relativePath=$hash"
   }
 
