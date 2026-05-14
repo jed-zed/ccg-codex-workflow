@@ -254,8 +254,28 @@ function validateReleaseDocs() {
     "response file remains the source of truth",
     "heuristic gates",
     "migration-from-claude-ccg.md",
+    "Codex Desktop",
+    "Codex CLI 0.130",
+    "prompt-text invocation",
+    "doctor cannot prove slash autocomplete",
+    "Desktop autocomplete smoke test",
+    "CLI slash autocomplete is not required to pass",
   ]) {
     if (!readme.includes(phrase)) fail(`README is missing release-readiness phrase: ${phrase}`);
+  }
+
+  const parityMatrix = fs.readFileSync(path.join(repoRoot, "docs/original-ccg-parity-matrix.md"), "utf8");
+  for (const phrase of ["Slash autocomplete is verified in Codex Desktop", "Codex CLI 0.130/TUI"]) {
+    if (!parityMatrix.includes(phrase)) fail(`parity matrix is missing autocomplete phrase: ${phrase}`);
+  }
+
+  const doctorScript = fs.readFileSync(path.join(repoRoot, "plugins/ccg/scripts/doctor.ps1"), "utf8");
+  for (const phrase of [
+    "doctor cannot prove slash autocomplete",
+    "Codex Desktop autocomplete needs a manual UI smoke test",
+    "Codex CLI/TUI autocomplete is optional",
+  ]) {
+    if (!doctorScript.includes(phrase)) fail(`doctor.ps1 is missing autocomplete diagnostic phrase: ${phrase}`);
   }
 
   const optionalMcp = fs.readFileSync(path.join(repoRoot, "docs/optional-mcp.md"), "utf8");

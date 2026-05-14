@@ -72,5 +72,5 @@ The original project is Claude-led: Claude Code orchestrates Codex and Gemini. T
 ## Acceptance Notes
 
 - A command is not considered parity-complete until it has a command file, skill, `agents/openai.yaml`, command index entry, bridge coverage, README mention, and fixture/validation coverage.
-- Slash autocomplete is still client-dependent. Prompt-text invocation remains the supported fallback.
+- Slash autocomplete is verified in Codex Desktop after plugin cache sync and session restart. Codex CLI 0.130/TUI still requires prompt-text invocation as the supported fallback when autocomplete is absent.
 - Gemini helper calls must open the browser preview automatically unless the user explicitly asks for headless execution.
