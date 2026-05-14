@@ -112,7 +112,10 @@ const geminiPreview = path.join(
 );
 const pluginDoctor = path.join(repoRoot, "plugins", "ccg", "scripts", "doctor.ps1");
 const syncLocalPluginCache = path.join(repoRoot, "scripts", "sync-local-plugin-cache.ps1");
+const pluginSyncLocalPluginCache = path.join(repoRoot, "plugins", "ccg", "scripts", "sync-local-plugin-cache.ps1");
 const ccgPlanSkill = path.join(repoRoot, "plugins", "ccg", "skills", "ccg-plan", "SKILL.md");
+const ccgDoctorSkill = path.join(repoRoot, "plugins", "ccg", "skills", "ccg-doctor", "SKILL.md");
+const realPluginRoot = path.join(repoRoot, "plugins", "ccg");
 
 function createMinimalCcgPlugin(root, version = "9.9.9") {
   writeFile(
@@ -131,6 +134,13 @@ function createMinimalCcgPlugin(root, version = "9.9.9") {
   }
   writeFile(path.join(root, "skills", "ccg-executor", "scripts", "invoke_gemini_preview.py"), "# helper\n");
   writeFile(path.join(root, "scripts", "doctor.ps1"), "# doctor\n");
+}
+
+function realPluginVersion() {
+  const manifest = JSON.parse(
+    fs.readFileSync(path.join(realPluginRoot, ".codex-plugin", "plugin.json"), "utf8")
+  );
+  return String(manifest.version);
 }
 
 test("verify-change working mode records numstat additions", () => {
@@ -422,6 +432,105 @@ test("doctor fails when cached key files are missing", () => {
     json.checks.some((check) => check.name === "cached key file: commands\\plan.md" && check.status === "FAIL"),
     "expected cached commands\\plan.md failure"
   );
+});
+
+test("doctor fix refreshes stale cache and reports fresh cache", () => {
+  const codexHome = tempDir("ccg-doctor-fix-codex-");
+  const version = realPluginVersion();
+  const cacheRoot = path.join(codexHome, "plugins", "cache", "ccg-codex-workflow", "ccg", version);
+  writeFile(path.join(cacheRoot, ".codex-plugin", "plugin.json"), JSON.stringify({ name: "ccg", version }, null, 2));
+  writeFile(path.join(cacheRoot, "commands", "plan.md"), "# stale\n");
+
+  const result = run(
+    powershell,
+    [
+      "-NoProfile",
+      "-ExecutionPolicy",
+      "Bypass",
+      "-File",
+      pluginDoctor,
+      "-CodexHome",
+      codexHome,
+      "-PluginRoot",
+      realPluginRoot,
+      "-Fix",
+      "-Json",
+    ],
+    { allowFailure: true }
+  );
+  const json = parseJsonOutput(result);
+  const freshness = json.checks.find((check) => check.name === "plugin cache freshness");
+  assert(freshness && freshness.status === "PASS", "expected -Fix to refresh stale cache");
+  assert(
+    fs.existsSync(path.join(cacheRoot, "skills", "ccg-plan", "SKILL.md")),
+    "expected -Fix to copy real plugin files into cache"
+  );
+});
+
+test("doctor fix restores missing cached key file", () => {
+  const codexHome = tempDir("ccg-doctor-fix-codex-");
+  const version = realPluginVersion();
+  const cacheRoot = path.join(codexHome, "plugins", "cache", "ccg-codex-workflow", "ccg", version);
+  fs.cpSync(realPluginRoot, cacheRoot, { recursive: true });
+  fs.rmSync(path.join(cacheRoot, "commands", "plan.md"), { force: true });
+
+  const result = run(
+    powershell,
+    [
+      "-NoProfile",
+      "-ExecutionPolicy",
+      "Bypass",
+      "-File",
+      pluginDoctor,
+      "-CodexHome",
+      codexHome,
+      "-PluginRoot",
+      realPluginRoot,
+      "-Fix",
+      "-Json",
+    ],
+    { allowFailure: true }
+  );
+  const json = parseJsonOutput(result);
+  assert(fs.existsSync(path.join(cacheRoot, "commands", "plan.md")), "expected -Fix to restore commands/plan.md");
+  assert(
+    json.checks.some((check) => check.name === "cached key file: commands\\plan.md" && check.status === "PASS"),
+    "expected restored cached key file to pass"
+  );
+});
+
+test("doctor fix does not install command bridge", () => {
+  const codexHome = tempDir("ccg-doctor-fix-codex-");
+  const result = run(
+    powershell,
+    [
+      "-NoProfile",
+      "-ExecutionPolicy",
+      "Bypass",
+      "-File",
+      pluginDoctor,
+      "-CodexHome",
+      codexHome,
+      "-PluginRoot",
+      realPluginRoot,
+      "-Fix",
+      "-Json",
+    ],
+    { allowFailure: true }
+  );
+  const json = parseJsonOutput(result);
+  assert(!fs.existsSync(path.join(codexHome, "commands", "ccg.md")), "did not expect -Fix to install bridge");
+  assert(
+    json.checks.some((check) => check.name === "command bridge: ccg.md" && check.status === "WARN"),
+    "expected missing command bridge to remain a warning"
+  );
+});
+
+test("ccg-doctor skill keeps fix read-only outside source checkout", () => {
+  const text = fs.readFileSync(ccgDoctorSkill, "utf8");
+  assert(text.includes("--fix"), "expected /ccg:doctor --fix guidance");
+  assert(text.includes("source checkout"), "expected source checkout guard");
+  assert(text.includes("read-only"), "expected read-only fallback guidance");
 });
 
 let failures = 0;
