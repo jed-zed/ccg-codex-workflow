@@ -127,7 +127,7 @@ SNAPSHOT_EXCLUDE_SUMMARY = (
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Run Gemini with browser preview")
-    parser.add_argument("--model", default=os.environ.get("GEMINI_MODEL", "gemini-2.5-flash"))
+    parser.add_argument("--model", default=os.environ.get("GEMINI_MODEL", "gemini-3.1-pro-preview"))
     parser.add_argument("--workdir", default=os.getcwd())
     parser.add_argument("--prompt", default="")
     parser.add_argument("--prompt-file", default="")

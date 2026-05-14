@@ -56,6 +56,19 @@ codex debug prompt-input | Select-String "ccg:"
 
 `doctor.ps1` is read-only. It checks the plugin files, Codex plugin cache, prompt-visible `ccg:*` skills, MCP visibility, optional command bridge files, and Gemini CLI presence. It cannot prove slash-menu autocomplete, because that depends on the Codex TUI build; use prompt-text invocation when autocomplete is absent.
 
+### Local Development Cache Sync
+
+For first install, use `codex plugin marketplace add`. For local development after editing files in this repository, Codex CLI 0.130 does not guarantee that running `marketplace add` again refreshes an already-added local marketplace cache. Sync the local cache explicitly:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\sync-local-plugin-cache.ps1 -WhatIf
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\sync-local-plugin-cache.ps1
+```
+
+The sync script refreshes only this plugin's current versioned cache directory under `~/.codex/plugins/cache/ccg-codex-workflow/ccg/<version>`. It does not edit `config.toml`, install the optional command bridge, or call Gemini. Restart the current Codex TUI session after syncing.
+
+`doctor.ps1` compares the source plugin with the cached plugin. A stale-cache warning means the source and cache differ; run the sync script and restart Codex.
+
 For machine-readable output:
 
 ```powershell
@@ -137,6 +150,8 @@ Create a Codex-native CCG plan:
 /ccg:plan Add user login audit logging
 ```
 
+Real `/ccg:plan` runs require Gemini participation. Codex must launch the preview helper, read a non-empty `CCG_GEMINI_RESPONSE_FILE`, and include Codex/Gemini analysis before writing `.claude/plan/*.md`. If Gemini fails, planning stops instead of producing a fake dual-model plan.
+
 Execute a CCG plan:
 
 ```text
@@ -211,8 +226,10 @@ Snapshots exclude common secret files and directories such as `.env`, `.env.*`, 
 Smoke test:
 
 ```powershell
-python .\plugins\ccg\skills\ccg-executor\scripts\invoke_gemini_preview.py --workdir . --model gemini-2.5-flash --prompt "Reply exactly: CCG_OK" --no-browser --hold-seconds 0
+python .\plugins\ccg\skills\ccg-executor\scripts\invoke_gemini_preview.py --workdir . --model gemini-3.1-pro-preview --prompt "Reply exactly: CCG_OK" --no-browser --hold-seconds 0
 ```
+
+The default Gemini model is `gemini-3.1-pro-preview`. You can override it with `GEMINI_MODEL` or `--model`.
 
 Use `--direct-workdir` only when you explicitly want Gemini to run against the real workspace.
 

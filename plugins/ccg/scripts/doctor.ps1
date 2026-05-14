@@ -48,6 +48,21 @@ function Invoke-CapturedCommand {
   }
 }
 
+function Join-PathMany {
+  param(
+    [Parameter(Mandatory = $true)]
+    [string]$Base,
+    [Parameter(ValueFromRemainingArguments = $true)]
+    [string[]]$Children
+  )
+
+  $path = $Base
+  foreach ($child in $Children) {
+    $path = Join-Path $path $child
+  }
+  return $path
+}
+
 function Test-JsonFile {
   param(
     [string]$Name,
@@ -137,6 +152,74 @@ function Test-BridgeFile {
   }
 }
 
+function Test-CacheKeyFile {
+  param(
+    [string]$RelativePath,
+    [string]$CacheRoot
+  )
+
+  $path = $CacheRoot
+  foreach ($part in ($RelativePath -split "[\\/]")) {
+    $path = Join-Path $path $part
+  }
+  Test-PathExists "cached key file: $RelativePath" $path "Run scripts\sync-local-plugin-cache.ps1 from the repository root and restart Codex." | Out-Null
+}
+
+function Test-IgnoredDigestPath {
+  param([string]$RelativePath)
+
+  $normalized = $RelativePath.Replace("\", "/")
+  $parts = $normalized -split "/"
+  foreach ($part in $parts) {
+    if ($part -in @(".git", "__pycache__", ".pytest_cache", ".mypy_cache", ".ruff_cache")) {
+      return $true
+    }
+  }
+
+  foreach ($suffix in @(".pyc", ".pyo", ".log", ".tmp")) {
+    if ($normalized.EndsWith($suffix, [System.StringComparison]::OrdinalIgnoreCase)) {
+      return $true
+    }
+  }
+
+  return $false
+}
+
+function Convert-BytesToHex {
+  param([byte[]]$Bytes)
+
+  return -join ($Bytes | ForEach-Object { $_.ToString("x2") })
+}
+
+function Get-TreeDigest {
+  param([string]$Root)
+
+  if (-not (Test-Path -LiteralPath $Root)) {
+    return ""
+  }
+
+  $rootPath = [System.IO.Path]::GetFullPath($Root).TrimEnd([System.IO.Path]::DirectorySeparatorChar, [System.IO.Path]::AltDirectorySeparatorChar) + [System.IO.Path]::DirectorySeparatorChar
+  $entries = @()
+  $files = Get-ChildItem -LiteralPath $Root -Recurse -File -Force | Sort-Object FullName
+  foreach ($file in $files) {
+    $relativePath = $file.FullName.Substring($rootPath.Length).Replace("\", "/")
+    if (Test-IgnoredDigestPath $relativePath) {
+      continue
+    }
+
+    $hash = (Get-FileHash -LiteralPath $file.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+    $entries += "$relativePath=$hash"
+  }
+
+  $digestInput = [System.Text.Encoding]::UTF8.GetBytes(($entries -join "`n"))
+  $sha = [System.Security.Cryptography.SHA256]::Create()
+  try {
+    return Convert-BytesToHex ($sha.ComputeHash($digestInput))
+  } finally {
+    $sha.Dispose()
+  }
+}
+
 if ([string]::IsNullOrWhiteSpace($CodexHome)) {
   $CodexHome = Join-Path $HOME ".codex"
 }
@@ -163,7 +246,7 @@ if ($codexCommand) {
   Add-Check "codex CLI found" "FAIL" "codex was not found in PATH." "Install Codex CLI or add it to PATH."
 }
 
-$pluginJson = Join-Path $PluginRoot ".codex-plugin\plugin.json"
+$pluginJson = Join-PathMany $PluginRoot ".codex-plugin" "plugin.json"
 $mcpJson = Join-Path $PluginRoot ".mcp.json"
 $pluginManifest = Test-JsonFile "plugin manifest" $pluginJson
 $mcpManifest = Test-JsonFile "plugin MCP manifest" $mcpJson
@@ -179,21 +262,52 @@ foreach ($commandName in @("ccg.md", "plan.md", "execute.md", "doctor.md", "gemi
 }
 
 foreach ($skillName in @("ccg-plan", "ccg-execute", "ccg-doctor", "ccg-gemini-preview", "verify-change")) {
-  $skillPath = Join-Path $skillsDir "$skillName\SKILL.md"
+  $skillPath = Join-PathMany $skillsDir $skillName "SKILL.md"
   Test-PathExists "plugin skill: $skillName" $skillPath "Restore or reinstall the CCG plugin skills." | Out-Null
 }
 
 if ($pluginManifest -and $pluginManifest.version) {
-  $cacheRoot = Join-Path $CodexHome "plugins\cache\ccg-codex-workflow\ccg\$($pluginManifest.version)"
+  $cacheRoot = Join-PathMany $CodexHome "plugins" "cache" "ccg-codex-workflow" "ccg" "$($pluginManifest.version)"
 } else {
-  $cacheRoot = Join-Path $CodexHome "plugins\cache\ccg-codex-workflow\ccg\0.1.0"
+  $cacheRoot = Join-PathMany $CodexHome "plugins" "cache" "ccg-codex-workflow" "ccg" "0.1.0"
 }
 
 if (Test-Path -LiteralPath $cacheRoot) {
   Add-Check "plugin cache" "PASS" "Found: $cacheRoot"
+  $cacheManifest = Test-JsonFile "plugin cache manifest" (Join-PathMany $cacheRoot ".codex-plugin" "plugin.json")
+  if ($pluginManifest -and $cacheManifest) {
+    $sourceVersion = [string]$pluginManifest.version
+    $cacheVersion = [string]$cacheManifest.version
+    if ($sourceVersion -eq $cacheVersion) {
+      Add-Check "plugin cache version" "PASS" "source=$sourceVersion cache=$cacheVersion"
+    } else {
+      Add-Check "plugin cache version" "WARN" "source=$sourceVersion cache=$cacheVersion" "Run scripts\sync-local-plugin-cache.ps1 and restart the current Codex TUI session."
+    }
+  }
+
+  foreach ($relativePath in @(
+    ".codex-plugin\plugin.json",
+    "commands\plan.md",
+    "commands\doctor.md",
+    "skills\ccg-plan\SKILL.md",
+    "skills\ccg-doctor\SKILL.md",
+    "skills\ccg-executor\scripts\invoke_gemini_preview.py",
+    "scripts\doctor.ps1"
+  )) {
+    Test-CacheKeyFile $relativePath $cacheRoot
+  }
+
   foreach ($skillName in @("ccg-plan", "ccg-execute", "ccg-doctor", "ccg-gemini-preview", "verify-change")) {
-    $cachedSkill = Join-Path $cacheRoot "skills\$skillName\SKILL.md"
+    $cachedSkill = Join-PathMany $cacheRoot "skills" $skillName "SKILL.md"
     Test-PathExists "cached skill: $skillName" $cachedSkill "Run 'codex plugin marketplace add <repo-path>' and restart Codex." | Out-Null
+  }
+
+  $sourceDigest = Get-TreeDigest $PluginRoot
+  $cacheDigest = Get-TreeDigest $cacheRoot
+  if ($sourceDigest -eq $cacheDigest) {
+    Add-Check "plugin cache freshness" "PASS" "source/cache digest match: $sourceDigest"
+  } else {
+    Add-Check "plugin cache freshness" "WARN" "source=$sourceDigest cache=$cacheDigest" "Run scripts\sync-local-plugin-cache.ps1 and restart the current Codex TUI session."
   }
 } else {
   Add-Check "plugin cache" "FAIL" "Missing: $cacheRoot" "Run 'codex plugin marketplace add <repo-path>' and restart Codex."
