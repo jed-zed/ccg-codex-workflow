@@ -9,7 +9,7 @@ const { spawnSync } = require("child_process");
 const repoRoot = path.resolve(__dirname, "..");
 const node = process.execPath;
 const python = process.env.PYTHON || "python";
-const powershell = process.env.POWERSHELL || "powershell";
+const powershell = process.env.POWERSHELL || (process.platform === "win32" ? "powershell" : "pwsh");
 
 const tests = [];
 
@@ -30,6 +30,7 @@ function run(command, args, opts = {}) {
   if (!opts.allowFailure && result.status !== 0) {
     throw new Error(
       `${command} ${args.join(" ")} failed with ${result.status}\n` +
+        `${result.error ? result.error.message + "\n" : ""}` +
         `${result.stdout || ""}${result.stderr || ""}`
     );
   }

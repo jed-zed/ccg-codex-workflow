@@ -28,10 +28,25 @@ function Test-SafeSegment {
   }
 }
 
+function Join-PathMany {
+  param(
+    [Parameter(Mandatory = $true)]
+    [string]$Base,
+    [Parameter(ValueFromRemainingArguments = $true)]
+    [string[]]$Children
+  )
+
+  $path = $Base
+  foreach ($child in $Children) {
+    $path = Join-Path $path $child
+  }
+  return $path
+}
+
 function Get-PluginManifest {
   param([string]$Root)
 
-  $manifestPath = Join-Path $Root ".codex-plugin\plugin.json"
+  $manifestPath = Join-PathMany $Root ".codex-plugin" "plugin.json"
   if (-not (Test-Path -LiteralPath $manifestPath)) {
     throw "Plugin manifest not found: $manifestPath"
   }
@@ -64,15 +79,15 @@ $manifest = Get-PluginManifest $PluginRoot
 $version = [string]$manifest.version
 Test-SafeSegment "plugin version" $version
 
-$cacheRoot = [System.IO.Path]::GetFullPath((Join-Path $CodexHome "plugins\cache"))
-$targetRoot = [System.IO.Path]::GetFullPath((Join-Path (Join-Path (Join-Path $cacheRoot $MarketplaceName) $PluginName) $version))
-$expectedRoot = [System.IO.Path]::GetFullPath((Join-Path (Join-Path (Join-Path $CodexHome "plugins\cache") $MarketplaceName) (Join-Path $PluginName $version)))
+$cacheRoot = [System.IO.Path]::GetFullPath((Join-PathMany $CodexHome "plugins" "cache"))
+$targetRoot = [System.IO.Path]::GetFullPath((Join-PathMany $cacheRoot $MarketplaceName $PluginName $version))
+$expectedRoot = [System.IO.Path]::GetFullPath((Join-PathMany $CodexHome "plugins" "cache" $MarketplaceName $PluginName $version))
 
 if ($targetRoot -ne $expectedRoot) {
   throw "Refusing to sync unexpected target: $targetRoot"
 }
 
-$cacheRootWithSeparator = $cacheRoot.TrimEnd("\") + "\"
+$cacheRootWithSeparator = $cacheRoot.TrimEnd([System.IO.Path]::DirectorySeparatorChar, [System.IO.Path]::AltDirectorySeparatorChar) + [System.IO.Path]::DirectorySeparatorChar
 if (-not $targetRoot.StartsWith($cacheRootWithSeparator, [System.StringComparison]::OrdinalIgnoreCase)) {
   throw "Refusing to sync outside Codex plugin cache: $targetRoot"
 }
