@@ -19,9 +19,9 @@ From this repository root:
 codex plugin marketplace add I:\ai\ccg-codex-workflow
 ```
 
-Restart the currently open Codex TUI session so plugin skills and MCP entries reload.
+Restart the currently open Codex client session so plugin skills, MCP entries, and command metadata reload.
 
-Codex CLI 0.130 loads this plugin's skills, but it does not currently expose marketplace plugin commands as custom slash-command autocomplete entries in the TUI. A computer reboot is not needed. If `/ccg:doctor`, `/ccg:plan`, or `/ccg:execute` does not appear in the autocomplete menu, type the invocation as normal prompt text:
+Codex Desktop has been manually verified to show `/ccg:*` slash-command autocomplete for this plugin after the plugin cache is current and the Desktop session is restarted. Codex CLI 0.130 loads this plugin's skills and MCP entries, but it does not currently guarantee marketplace plugin commands as custom slash-command autocomplete entries in the TUI. A computer reboot is not needed. If `/ccg:doctor`, `/ccg:plan`, or `/ccg:execute` does not appear in a CLI/TUI autocomplete menu, type the invocation as normal prompt text:
 
 ```text
 /ccg:doctor
@@ -39,13 +39,13 @@ Execute /ccg:execute .claude/plan/my-task.md
 
 ### Codex Compatibility Matrix
 
-| Capability | Codex CLI 0.130 | Expected behavior |
-|------------|-----------------|-------------------|
-| Plugin skills | Supported | `codex debug prompt-input` should list `ccg:*` skills after install/restart. |
-| Plugin MCP entries | Supported | `codex mcp list` should show configured plugin MCP servers when available. |
-| Marketplace command autocomplete | Not guaranteed | `/ccg:*` may not appear in the TUI slash menu. |
-| Prompt-text invocation | Supported | Type `/ccg:doctor`, `/ccg:plan ...`, `/ccg:execute ...`, or prefix with `Execute ...` if slash input is intercepted. |
-| Command bridge | Client-dependent | `scripts/install-codex-command-bridge.ps1` helps only clients that discover `~/.codex/commands`. |
+| Capability | Codex Desktop | Codex CLI 0.130 / TUI | Expected behavior |
+|------------|---------------|------------------------|-------------------|
+| Plugin skills | Supported | Supported | `codex debug prompt-input` should list `ccg:*` skills after install/restart. |
+| Plugin MCP entries | Supported | Supported | `codex mcp list` should show configured plugin MCP servers when available. |
+| Marketplace command autocomplete | Verified for `/ccg:*` | Not guaranteed | Desktop should show `/ccg:plan`, `/ccg:execute`, `/ccg:doctor`, and the other `/ccg:*` commands; CLI/TUI slash menu absence is not a plugin failure. |
+| Prompt-text invocation | Supported | Supported | Type `/ccg:doctor`, `/ccg:plan ...`, `/ccg:execute ...`, or prefix with `Execute ...` if slash input is intercepted. |
+| Command bridge | Usually unnecessary | Client-dependent | `scripts/install-codex-command-bridge.ps1` helps only clients that discover `~/.codex/commands`. |
 
 ### Smoke Test After Install
 
@@ -57,6 +57,8 @@ codex debug prompt-input | Select-String "ccg:"
 ```
 
 `doctor.ps1` is read-only. It checks the plugin files, Codex plugin cache, prompt-visible `ccg:*` skills, MCP visibility, optional command bridge files, and Gemini CLI presence. It cannot prove slash-menu autocomplete, because that depends on the Codex TUI build; use prompt-text invocation when autocomplete is absent.
+
+Desktop autocomplete smoke test: open Codex Desktop, type `/ccg`, and confirm the menu includes `/ccg:plan`, `/ccg:execute`, `/ccg:doctor`, and the high-frequency `/ccg:*` commands. CLI smoke test: use `codex debug prompt-input | Select-String "ccg:"` to prove skills are prompt-visible; CLI slash autocomplete is not required to pass.
 
 To make a real, optional Gemini model availability probe, run:
 
@@ -98,7 +100,7 @@ If your Codex build supports command discovery, also try:
 /commands reload
 ```
 
-Then in Codex, test prompt-text routing with:
+Then in Codex CLI/TUI, test prompt-text routing with:
 
 ```text
 Execute /ccg:doctor
@@ -108,6 +110,7 @@ Execute /ccg:gemini-preview Reply exactly: CCG_OK
 
 For a release-readiness smoke test, verify all of the following on the target machine:
 
+- Codex Desktop autocomplete shows `/ccg:plan`, `/ccg:execute`, and `/ccg:doctor` after restarting the Desktop session.
 - `codex debug prompt-input | Select-String "ccg:"` shows `ccg:doctor`, `ccg:plan`, and `ccg:execute`.
 - `codex mcp list` shows the expected plugin or global MCP entries.
 - `/ccg:doctor` reports no `FAIL`.
@@ -152,9 +155,9 @@ This plugin uses namespaced prompt invocations shaped like `/ccg:command`, so th
 
 ## Codex CLI Command Bridge
 
-This repository keeps command markdown files under `plugins/ccg/commands/` so future Codex builds or compatible frontends can discover them. Codex CLI 0.130 may still ignore those files for TUI autocomplete.
+This repository keeps command markdown files under `plugins/ccg/commands/` so Codex Desktop, future Codex builds, or compatible frontends can discover them. Codex Desktop has been manually verified to show `/ccg:*` autocomplete from the installed plugin. Codex CLI 0.130 may still ignore those files for TUI autocomplete.
 
-The optional bridge below copies thin command stubs into `~/.codex/commands`. Use it only for Codex builds that support user-command discovery; on builds that do not, it is harmless but will not make `/ccg:*` appear in autocomplete:
+The optional bridge below copies thin command stubs into `~/.codex/commands`. Use it only for Codex builds that support user-command discovery; on builds that do not, it is harmless but will not make `/ccg:*` appear in autocomplete. Codex Desktop does not need this bridge when plugin autocomplete is already working.
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\scripts\install-codex-command-bridge.ps1 -WhatIf
@@ -170,7 +173,7 @@ This copies thin command stubs into:
 
 The plugin remains the source of truth; the bridge is only a compatibility layer for clients that already support local command discovery.
 
-Codex CLI 0.130 exposes prompt-visible skills through `codex debug prompt-input`, but it does not expose a public command-registry debug command. Doctor can prove skills and bridge files are present; it cannot prove TUI slash autocomplete.
+Codex CLI 0.130 exposes prompt-visible skills through `codex debug prompt-input`, but it does not expose a public command-registry debug command. Doctor can prove skills and bridge files are present; doctor cannot prove slash autocomplete. Verify Codex Desktop autocomplete with the manual UI smoke test above; treat CLI/TUI slash autocomplete as optional.
 
 To remove the bridge:
 

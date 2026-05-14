@@ -565,7 +565,7 @@ if ($Json) {
   }
   Write-Output ""
   Write-Output ("Summary: PASS={0} WARN={1} FAIL={2} SKIP={3}" -f $counts.PASS, $counts.WARN, $counts.FAIL, $counts.SKIP)
-  Write-Output "Note: slash autocomplete cannot be proven by this script; use prompt-text invocation if autocomplete is absent."
+  Write-Output "Note: doctor cannot prove slash autocomplete. Codex Desktop autocomplete needs a manual UI smoke test; Codex CLI/TUI autocomplete is optional, so use prompt-text invocation if autocomplete is absent."
 }
 
 if ($counts.FAIL -gt 0) {
