@@ -61,7 +61,7 @@ Use Gemini as a helper, not as the executor of record.
 Recommended safe Gemini invocation:
 
 ```powershell
-python "<path-to-this-skill>\scripts\invoke_gemini_preview.py" --workdir "<repo-abs-path>" --model gemini-2.5-flash --prompt-file "<prompt-file>"
+python "<path-to-this-skill>\scripts\invoke_gemini_preview.py" --workdir "<repo-abs-path>" --model gemini-3.1-pro-preview --prompt-file "<prompt-file>"
 ```
 
 Resolve `<path-to-this-skill>` from this `SKILL.md` directory. This helper creates a disposable snapshot of the workspace by default, starts a localhost browser preview, streams Gemini `stream-json` output into the page, and writes the raw output under `~/.codex/ccg/logs/`. It mirrors the original CCG `codeagent-wrapper` Web UI behavior without calling the Claude-side wrapper.

@@ -43,6 +43,7 @@ function validateJson() {
 function validateScripts() {
   const files = [
     "scripts/doctor.ps1",
+    "scripts/sync-local-plugin-cache.ps1",
     "plugins/ccg/scripts/doctor.ps1",
     "plugins/ccg/commands/doctor.md",
     "plugins/ccg/skills/ccg-doctor/SKILL.md",
@@ -55,6 +56,45 @@ function validateScripts() {
     if (!fs.existsSync(full)) fail(`missing script: ${file}`);
   }
   console.log(`scripts ok - ${files.length} file(s)`);
+}
+
+function validateGeminiDefaults() {
+  const helper = fs.readFileSync(
+    path.join(repoRoot, "plugins/ccg/skills/ccg-executor/scripts/invoke_gemini_preview.py"),
+    "utf8"
+  );
+  if (!helper.includes('os.environ.get("GEMINI_MODEL", "gemini-3.1-pro-preview")')) {
+    fail("Gemini preview helper default model must be gemini-3.1-pro-preview");
+  }
+
+  const planSkill = fs.readFileSync(path.join(repoRoot, "plugins/ccg/skills/ccg-plan/SKILL.md"), "utf8");
+  for (const phrase of [
+    "Gemini gate",
+    "CCG_GEMINI_RESPONSE_FILE",
+    "do not write or present a final plan",
+    "gemini-3.1-pro-preview",
+  ]) {
+    if (!planSkill.includes(phrase)) fail(`ccg-plan skill is missing Gemini gate phrase: ${phrase}`);
+  }
+
+  const previewSkill = fs.readFileSync(
+    path.join(repoRoot, "plugins/ccg/skills/ccg-gemini-preview/SKILL.md"),
+    "utf8"
+  );
+  if (!previewSkill.includes("gemini-3.1-pro-preview")) {
+    fail("ccg-gemini-preview skill must document gemini-3.1-pro-preview as the default model");
+  }
+  for (const file of [
+    "README.md",
+    "plugins/ccg/skills/ccg-plan/SKILL.md",
+    "plugins/ccg/skills/ccg-gemini-preview/SKILL.md",
+    "plugins/ccg/skills/ccg-executor/SKILL.md",
+    "plugins/ccg/commands/plan.md",
+  ]) {
+    const text = fs.readFileSync(path.join(repoRoot, file), "utf8");
+    if (text.includes("gemini-2.5-flash")) fail(`old Gemini default remains in ${file}`);
+  }
+  console.log("gemini defaults ok");
 }
 
 function validateSkills() {
@@ -88,6 +128,7 @@ function nodeCheck() {
 function main() {
   validateJson();
   validateScripts();
+  validateGeminiDefaults();
   validateSkills();
   nodeCheck();
 }

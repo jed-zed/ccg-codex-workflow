@@ -9,6 +9,7 @@ const { spawnSync } = require("child_process");
 const repoRoot = path.resolve(__dirname, "..");
 const node = process.execPath;
 const python = process.env.PYTHON || "python";
+const powershell = process.env.POWERSHELL || "powershell";
 
 const tests = [];
 
@@ -108,6 +109,28 @@ const geminiPreview = path.join(
   "scripts",
   "invoke_gemini_preview.py"
 );
+const pluginDoctor = path.join(repoRoot, "plugins", "ccg", "scripts", "doctor.ps1");
+const syncLocalPluginCache = path.join(repoRoot, "scripts", "sync-local-plugin-cache.ps1");
+const ccgPlanSkill = path.join(repoRoot, "plugins", "ccg", "skills", "ccg-plan", "SKILL.md");
+
+function createMinimalCcgPlugin(root, version = "9.9.9") {
+  writeFile(
+    path.join(root, ".codex-plugin", "plugin.json"),
+    JSON.stringify({ name: "ccg", version }, null, 2)
+  );
+  writeFile(path.join(root, ".mcp.json"), "{}\n");
+  for (const command of ["ccg", "plan", "execute", "doctor", "gemini-preview", "verify-change"]) {
+    writeFile(path.join(root, "commands", `${command}.md`), `# ${command}\n`);
+  }
+  for (const skill of ["ccg-plan", "ccg-execute", "ccg-doctor", "ccg-gemini-preview", "verify-change"]) {
+    writeFile(
+      path.join(root, "skills", skill, "SKILL.md"),
+      `---\nname: ${skill}\ndescription: ${skill}\n---\n`
+    );
+  }
+  writeFile(path.join(root, "skills", "ccg-executor", "scripts", "invoke_gemini_preview.py"), "# helper\n");
+  writeFile(path.join(root, "scripts", "doctor.ps1"), "# doctor\n");
+}
 
 test("verify-change working mode records numstat additions", () => {
   const dir = initGitRepo();
@@ -216,6 +239,188 @@ finally:
   const result = run(python, ["-c", snippet, geminiPreview, source]);
   assert(result.stdout.includes("SAFE_EXISTS=True"), `expected safe file in snapshot:\n${result.stdout}`);
   assert(result.stdout.includes("SENSITIVE_EXISTS=False"), `expected sensitive files excluded:\n${result.stdout}`);
+});
+
+test("Gemini preview helper default model supports environment and CLI overrides", () => {
+  const snippet = `
+import importlib.util, os, pathlib, sys
+script = pathlib.Path(sys.argv[1])
+spec = importlib.util.spec_from_file_location("gemini_preview", script)
+module = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(module)
+os.environ.pop("GEMINI_MODEL", None)
+sys.argv = ["tool"]
+print("DEFAULT=" + module.parse_args().model)
+os.environ["GEMINI_MODEL"] = "env-model"
+sys.argv = ["tool"]
+print("ENV=" + module.parse_args().model)
+sys.argv = ["tool", "--model", "cli-model"]
+print("CLI=" + module.parse_args().model)
+`;
+  const result = run(python, ["-c", snippet, geminiPreview]);
+  assert(result.stdout.includes("DEFAULT=gemini-3.1-pro-preview"), `expected upgraded default:\n${result.stdout}`);
+  assert(result.stdout.includes("ENV=env-model"), `expected GEMINI_MODEL override:\n${result.stdout}`);
+  assert(result.stdout.includes("CLI=cli-model"), `expected --model override:\n${result.stdout}`);
+});
+
+test("sync-local-plugin-cache WhatIf does not create cache files", () => {
+  const codexHome = tempDir("ccg-sync-codex-");
+  const pluginRoot = tempDir("ccg-sync-plugin-");
+  writeFile(
+    path.join(pluginRoot, ".codex-plugin", "plugin.json"),
+    JSON.stringify({ name: "ccg", version: "9.9.9" }, null, 2)
+  );
+  writeFile(path.join(pluginRoot, "skills", "sample", "SKILL.md"), "---\nname: sample\ndescription: sample\n---\n");
+
+  run(powershell, [
+    "-NoProfile",
+    "-ExecutionPolicy",
+    "Bypass",
+    "-File",
+    syncLocalPluginCache,
+    "-CodexHome",
+    codexHome,
+    "-PluginRoot",
+    pluginRoot,
+    "-MarketplaceName",
+    "local-market",
+    "-PluginName",
+    "ccg",
+    "-WhatIf",
+  ]);
+
+  const target = path.join(codexHome, "plugins", "cache", "local-market", "ccg", "9.9.9");
+  assert(!fs.existsSync(target), "expected -WhatIf to leave cache target absent");
+});
+
+test("sync-local-plugin-cache refreshes only the versioned plugin cache", () => {
+  const codexHome = tempDir("ccg-sync-codex-");
+  const pluginRoot = tempDir("ccg-sync-plugin-");
+  writeFile(
+    path.join(pluginRoot, ".codex-plugin", "plugin.json"),
+    JSON.stringify({ name: "ccg", version: "9.9.9" }, null, 2)
+  );
+  writeFile(path.join(pluginRoot, "commands", "ccg.md"), "# command\n");
+  writeFile(path.join(pluginRoot, "skills", "sample", "SKILL.md"), "---\nname: sample\ndescription: sample\n---\n");
+
+  const target = path.join(codexHome, "plugins", "cache", "local-market", "ccg", "9.9.9");
+  writeFile(path.join(target, "stale.txt"), "stale\n");
+
+  run(powershell, [
+    "-NoProfile",
+    "-ExecutionPolicy",
+    "Bypass",
+    "-File",
+    syncLocalPluginCache,
+    "-CodexHome",
+    codexHome,
+    "-PluginRoot",
+    pluginRoot,
+    "-MarketplaceName",
+    "local-market",
+    "-PluginName",
+    "ccg",
+  ]);
+
+  assert(fs.existsSync(path.join(target, ".codex-plugin", "plugin.json")), "expected manifest copied to cache");
+  assert(fs.existsSync(path.join(target, "skills", "sample", "SKILL.md")), "expected skill copied to cache");
+  assert(!fs.existsSync(path.join(target, "stale.txt")), "expected stale cache file removed during refresh");
+});
+
+test("sync-local-plugin-cache rejects unsafe cache path segments", () => {
+  const codexHome = tempDir("ccg-sync-codex-");
+  const pluginRoot = tempDir("ccg-sync-plugin-");
+  writeFile(
+    path.join(pluginRoot, ".codex-plugin", "plugin.json"),
+    JSON.stringify({ name: "ccg", version: "9.9.9" }, null, 2)
+  );
+
+  const result = run(
+    powershell,
+    [
+      "-NoProfile",
+      "-ExecutionPolicy",
+      "Bypass",
+      "-File",
+      syncLocalPluginCache,
+      "-CodexHome",
+      codexHome,
+      "-PluginRoot",
+      pluginRoot,
+      "-MarketplaceName",
+      "..\\outside",
+      "-PluginName",
+      "ccg",
+    ],
+    { allowFailure: true }
+  );
+
+  assert(result.status !== 0, "expected unsafe marketplace segment to fail");
+});
+
+test("ccg-plan skill requires a Gemini response gate", () => {
+  const text = fs.readFileSync(ccgPlanSkill, "utf8");
+  assert(text.includes("Gemini gate"), "expected Gemini gate section");
+  assert(text.includes("CCG_GEMINI_RESPONSE_FILE"), "expected response file gate");
+  assert(text.includes("do not write or present a final plan"), "expected no fake dual-model plan rule");
+  assert(text.includes("gemini-3.1-pro-preview"), "expected upgraded default Gemini model");
+});
+
+test("doctor warns when source plugin and cache digests differ", () => {
+  const codexHome = tempDir("ccg-doctor-codex-");
+  const pluginRoot = tempDir("ccg-doctor-plugin-");
+  createMinimalCcgPlugin(pluginRoot);
+  const cacheRoot = path.join(codexHome, "plugins", "cache", "ccg-codex-workflow", "ccg", "9.9.9");
+  fs.cpSync(pluginRoot, cacheRoot, { recursive: true });
+  writeFile(path.join(cacheRoot, "commands", "plan.md"), "# stale plan\n");
+
+  const result = run(powershell, [
+    "-NoProfile",
+    "-ExecutionPolicy",
+    "Bypass",
+    "-File",
+    pluginDoctor,
+    "-CodexHome",
+    codexHome,
+    "-PluginRoot",
+    pluginRoot,
+    "-Json",
+  ]);
+  const json = parseJsonOutput(result);
+  const freshness = json.checks.find((check) => check.name === "plugin cache freshness");
+  assert(freshness && freshness.status === "WARN", "expected stale cache freshness warning");
+});
+
+test("doctor fails when cached key files are missing", () => {
+  const codexHome = tempDir("ccg-doctor-codex-");
+  const pluginRoot = tempDir("ccg-doctor-plugin-");
+  createMinimalCcgPlugin(pluginRoot);
+  const cacheRoot = path.join(codexHome, "plugins", "cache", "ccg-codex-workflow", "ccg", "9.9.9");
+  fs.cpSync(pluginRoot, cacheRoot, { recursive: true });
+  fs.rmSync(path.join(cacheRoot, "commands", "plan.md"), { force: true });
+
+  const result = run(
+    powershell,
+    [
+      "-NoProfile",
+      "-ExecutionPolicy",
+      "Bypass",
+      "-File",
+      pluginDoctor,
+      "-CodexHome",
+      codexHome,
+      "-PluginRoot",
+      pluginRoot,
+      "-Json",
+    ],
+    { allowFailure: true }
+  );
+  assert(result.status !== 0, "expected missing cached key file to fail doctor");
+  const json = parseJsonOutput(result);
+  assert(
+    json.checks.some((check) => check.name === "cached key file: commands\\plan.md" && check.status === "FAIL"),
+    "expected cached commands\\plan.md failure"
+  );
 });
 
 let failures = 0;
