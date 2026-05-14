@@ -386,7 +386,7 @@ test("doctor warns when source plugin and cache digests differ", () => {
     "-PluginRoot",
     pluginRoot,
     "-Json",
-  ]);
+  ], { allowFailure: true });
   const json = parseJsonOutput(result);
   const freshness = json.checks.find((check) => check.name === "plugin cache freshness");
   assert(freshness && freshness.status === "WARN", "expected stale cache freshness warning");
