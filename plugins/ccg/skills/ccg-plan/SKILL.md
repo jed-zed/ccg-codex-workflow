@@ -15,6 +15,12 @@ Create decision-complete CCG plans for later `/ccg:execute`. This skill replaces
 - If no user requirement is provided, answer in Chinese with usage examples and do not write files.
 - If the user explicitly asks to revise an existing plan file, update only that plan file. Otherwise create a new plan and never overwrite an existing plan; use `-v2`, `-v3`, and so on.
 
+## Language Contract
+
+All `/ccg:plan` user-facing output must be Chinese by default. This includes empty-input usage/help, progress summaries, ambiguity questions, Gemini launch or failure reports, saved-plan summaries, and the final `/ccg:execute <plan-path>` handoff. English is allowed only for literal commands, file paths, code identifiers, generated English slugs, model names, environment variables, and raw Gemini excerpts that are clearly labeled as excerpts.
+
+Internal prompts to tools or Gemini may use English when that improves retrieval or technical precision, but Codex must translate the final planning interaction back into concise Chinese for the user.
+
 ## Gemini gate
 
 For any real plan creation or plan revision, Gemini participation is mandatory. Before you write or present a final plan, you must have all of the following:

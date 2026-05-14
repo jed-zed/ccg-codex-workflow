@@ -524,6 +524,73 @@ finally:
   assert(result.stdout.includes("REPARSE_LINK=True"), `expected reparse point fallback:\n${result.stdout}`);
 });
 
+test("Gemini stream parser extracts nested and chunked assistant text", () => {
+  const snippet = `
+import importlib.util, pathlib, sys
+script = pathlib.Path(sys.argv[1])
+spec = importlib.util.spec_from_file_location("gemini_preview", script)
+module = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(module)
+events = [
+    {"type": "message", "role": "assistant", "content": "direct "},
+    {"type": "message", "role": "assistant", "content": [{"type": "text", "text": "array "}, {"parts": [{"text": "parts "}]}]},
+    {"type": "delta", "delta": {"text": "delta "}},
+    {"type": "result", "status": "complete", "output_text": "result"},
+    {"type": "init", "session_id": "metadata-only", "status": "running"},
+    {"type": "message", "role": "user", "content": "ignored user text"},
+]
+print("TEXT=" + "".join(module.extract_event_text(event) for event in events))
+print("META_EMPTY=" + str(module.extract_event_text({"type": "result", "status": "complete", "session_id": "abc"}) == ""))
+`;
+  const result = run(python, ["-c", snippet, geminiPreview]);
+  assert(
+    result.stdout.includes("TEXT=direct array parts delta result"),
+    `expected nested stream-json text extraction:\n${result.stdout}`
+  );
+  assert(result.stdout.includes("META_EMPTY=True"), `expected metadata-only event ignored:\n${result.stdout}`);
+});
+
+test("Gemini snapshot honors ccgignore, optional gitignore, and size caps", () => {
+  const source = tempDir("ccg-gemini-ignore-source-");
+  const target = tempDir("ccg-gemini-ignore-target-");
+  writeFile(path.join(source, ".ccgignore"), "ignored.txt\n");
+  writeFile(path.join(source, ".gitignore"), "gitignored.txt\n");
+  writeFile(path.join(source, "keep.txt"), "safe\n");
+  writeFile(path.join(source, "ignored.txt"), "ignored\n");
+  writeFile(path.join(source, "gitignored.txt"), "git ignored\n");
+  writeFile(path.join(source, ".env"), "TOKEN=secret\n");
+  writeFile(path.join(source, "huge.bin"), "x".repeat(2048));
+
+  const snippet = `
+import importlib.util, json, pathlib, sys
+script = pathlib.Path(sys.argv[1])
+source = pathlib.Path(sys.argv[2])
+target = pathlib.Path(sys.argv[3]) / "snapshot"
+spec = importlib.util.spec_from_file_location("gemini_preview", script)
+module = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(module)
+class Args:
+    files_from = ""
+    respect_gitignore = True
+    max_snapshot_bytes = 512
+    max_snapshot_files = 0
+stats = module.copy_snapshot_tree(source, target, Args())
+print("KEEP_EXISTS=" + str((target / "keep.txt").exists()))
+print("IGNORED_EXISTS=" + str((target / "ignored.txt").exists()))
+print("GITIGNORED_EXISTS=" + str((target / "gitignored.txt").exists()))
+print("ENV_EXISTS=" + str((target / ".env").exists()))
+print("HUGE_EXISTS=" + str((target / "huge.bin").exists()))
+print("CAP_SKIPPED=" + str(stats["skipped_cap"] > 0))
+`;
+  const result = run(python, ["-c", snippet, geminiPreview, source, target]);
+  assert(result.stdout.includes("KEEP_EXISTS=True"), `expected keep.txt copied:\n${result.stdout}`);
+  assert(result.stdout.includes("IGNORED_EXISTS=False"), `expected .ccgignore pattern honored:\n${result.stdout}`);
+  assert(result.stdout.includes("GITIGNORED_EXISTS=False"), `expected .gitignore pattern honored:\n${result.stdout}`);
+  assert(result.stdout.includes("ENV_EXISTS=False"), `expected secret exclusion to win:\n${result.stdout}`);
+  assert(result.stdout.includes("HUGE_EXISTS=False"), `expected size cap to skip huge file:\n${result.stdout}`);
+  assert(result.stdout.includes("CAP_SKIPPED=True"), `expected cap skip count:\n${result.stdout}`);
+});
+
 test("Gemini preview helper default model supports environment and CLI overrides", () => {
   const snippet = `
 import importlib.util, os, pathlib, sys
@@ -572,18 +639,32 @@ sys.argv = ["tool"]
 args = module.parse_args()
 print("TEMPLATE=" + args.prompt_template)
 print("AUTO_CLOSE=" + str(args.auto_close_browser_seconds))
+print("MIN_HOLD=" + str(args.min_preview_hold_seconds))
 wrapped = module.apply_prompt_template(args, "Implement the feature")
 print("HAS_CODEX_OWNS=" + str("Codex owns" in wrapped))
 print("HAS_TASK=" + str("Implement the feature" in wrapped))
 html = module.make_handler().index_html()
 print("HAS_WINDOW_CLOSE=" + str("window.close()" in html))
+print("HAS_TIMELINE=" + str("timeline" in html and "Process" in html))
+print("HAS_RAW_STREAM=" + str("Raw stream-json" in html))
+args.no_browser = True
+args.preview_port = 0
+args.hold_seconds = 0
+print("HEADLESS_HOLD=" + str(module.effective_hold_seconds(args)))
+args.preview_port = 12345
+print("PREVIEW_HOLD=" + str(module.effective_hold_seconds(args)))
 `;
   const result = run(python, ["-c", snippet, geminiPreview]);
   assert(result.stdout.includes("TEMPLATE=general"), `expected general template default:\n${result.stdout}`);
   assert(result.stdout.includes("AUTO_CLOSE=3"), `expected 3s browser auto-close default:\n${result.stdout}`);
+  assert(result.stdout.includes("MIN_HOLD=5"), `expected preview final-state grace default:\n${result.stdout}`);
   assert(result.stdout.includes("HAS_CODEX_OWNS=True"), `expected template wrapping:\n${result.stdout}`);
   assert(result.stdout.includes("HAS_TASK=True"), `expected original prompt preserved:\n${result.stdout}`);
   assert(result.stdout.includes("HAS_WINDOW_CLOSE=True"), `expected preview page to close itself:\n${result.stdout}`);
+  assert(result.stdout.includes("HAS_TIMELINE=True"), `expected live process timeline in preview:\n${result.stdout}`);
+  assert(result.stdout.includes("HAS_RAW_STREAM=True"), `expected raw stream pane in preview:\n${result.stdout}`);
+  assert(result.stdout.includes("HEADLESS_HOLD=0"), `expected headless smoke to remain fast:\n${result.stdout}`);
+  assert(result.stdout.includes("PREVIEW_HOLD=5"), `expected visible preview to keep final state:\n${result.stdout}`);
 });
 
 test("CCG skills require browser preview for every workflow Gemini call", () => {

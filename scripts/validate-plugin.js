@@ -109,7 +109,17 @@ function validateGeminiTemplates() {
     path.join(repoRoot, "plugins/ccg/skills/ccg-executor/scripts/invoke_gemini_preview.py"),
     "utf8"
   );
-  for (const phrase of ["--prompt-template", "apply_prompt_template", "window.close()", "--no-auto-close-browser"]) {
+  for (const phrase of [
+    "--prompt-template",
+    "apply_prompt_template",
+    "window.close()",
+    "--no-auto-close-browser",
+    "extract_event_text",
+    "--max-snapshot-bytes",
+    "--files-from",
+    "events",
+    "Raw stream-json",
+  ]) {
     if (!helper.includes(phrase)) fail(`Gemini preview helper missing template/auto-close phrase: ${phrase}`);
   }
 
@@ -125,6 +135,46 @@ function validateGeminiTemplates() {
     if (!executorSkill.includes(phrase)) fail(`ccg-executor skill is missing preview-helper rule: ${phrase}`);
   }
   console.log("gemini templates ok");
+}
+
+function validatePlanLanguageContract() {
+  const planSkill = fs.readFileSync(path.join(repoRoot, "plugins/ccg/skills/ccg-plan/SKILL.md"), "utf8");
+  for (const phrase of [
+    "Language Contract",
+    "user-facing output must be Chinese",
+    "usage/help",
+    "failure reports",
+    "handoff",
+  ]) {
+    if (!planSkill.includes(phrase)) fail(`ccg-plan skill is missing Chinese output phrase: ${phrase}`);
+  }
+
+  const command = fs.readFileSync(path.join(repoRoot, "plugins/ccg/commands/plan.md"), "utf8");
+  if (!command.includes("user-facing output for this command must be Chinese")) {
+    fail("plan command must reinforce Chinese user-facing output");
+  }
+  console.log("plan language contract ok");
+}
+
+function validateReleaseDocs() {
+  const migration = path.join(repoRoot, "docs/migration-from-claude-ccg.md");
+  if (!fs.existsSync(migration)) fail("missing migration guide");
+
+  const readme = fs.readFileSync(path.join(repoRoot, "README.md"), "utf8");
+  for (const phrase of [
+    "CCG_OK",
+    "release-readiness smoke test",
+    ".ccgignore",
+    "response file remains the source of truth",
+    "heuristic gates",
+    "migration-from-claude-ccg.md",
+  ]) {
+    if (!readme.includes(phrase)) fail(`README is missing release-readiness phrase: ${phrase}`);
+  }
+
+  const optionalMcp = fs.readFileSync(path.join(repoRoot, "docs/optional-mcp.md"), "utf8");
+  if (!optionalMcp.includes("Reproducible MCP Mode")) fail("optional MCP docs must mention reproducible mode");
+  console.log("release docs ok");
 }
 
 function validateDoctorFixDocs() {
@@ -205,6 +255,8 @@ function main() {
   validateScripts();
   validateGeminiDefaults();
   validateGeminiTemplates();
+  validatePlanLanguageContract();
+  validateReleaseDocs();
   validateDoctorFixDocs();
   validateCiActions();
   validateSkills();

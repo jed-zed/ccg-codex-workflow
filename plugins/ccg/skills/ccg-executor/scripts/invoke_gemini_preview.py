@@ -9,6 +9,7 @@ streaming output in a browser while the subprocess runs.
 from __future__ import annotations
 
 import argparse
+import fnmatch
 import html
 import json
 import os
@@ -37,16 +38,39 @@ class State:
         self.session_id = ""
         self.content = ""
         self.raw = ""
+        self.events: list[dict[str, str]] = []
         self.status = "starting"
         self.done = False
         self.exit_code: int | None = None
         self.auto_close_browser_seconds = 3
+        self.output_file = ""
+        self.response_file = ""
+        self.snapshot_path = ""
+        self.snapshot_excludes = ""
+        self.stream_events = 0
         self.started_at = time.strftime("%Y-%m-%d %H:%M:%S")
 
     def update(self, **kwargs: object) -> None:
         with self.lock:
             for key, value in kwargs.items():
                 setattr(self, key, value)
+
+    def add_event(self, message: str) -> None:
+        if not message:
+            return
+        with self.lock:
+            self.events.append(
+                {
+                    "time": time.strftime("%H:%M:%S"),
+                    "message": message,
+                }
+            )
+            self.events = self.events[-200:]
+
+    def increment_stream_events(self) -> int:
+        with self.lock:
+            self.stream_events += 1
+            return self.stream_events
 
     def append_content(self, text: str) -> None:
         if not text:
@@ -69,10 +93,16 @@ class State:
                 "session_id": self.session_id,
                 "content": self.content,
                 "raw": self.raw,
+                "events": list(self.events),
                 "status": self.status,
                 "done": self.done,
                 "exit_code": self.exit_code,
                 "auto_close_browser_seconds": self.auto_close_browser_seconds,
+                "output_file": self.output_file,
+                "response_file": self.response_file,
+                "snapshot_path": self.snapshot_path,
+                "snapshot_excludes": self.snapshot_excludes,
+                "stream_events": self.stream_events,
                 "started_at": self.started_at,
             }
 
@@ -142,6 +172,34 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--no-browser", action="store_true")
     parser.add_argument("--auto-close-browser-seconds", type=int, default=3)
     parser.add_argument("--no-auto-close-browser", action="store_true")
+    parser.add_argument(
+        "--min-preview-hold-seconds",
+        type=int,
+        default=5,
+        help="Minimum final-state time for visible previews before shutting down the local server.",
+    )
+    parser.add_argument(
+        "--max-snapshot-bytes",
+        type=int,
+        default=0,
+        help="Optional cap for copied snapshot bytes. 0 means unlimited.",
+    )
+    parser.add_argument(
+        "--max-snapshot-files",
+        type=int,
+        default=0,
+        help="Optional cap for copied snapshot files. 0 means unlimited.",
+    )
+    parser.add_argument(
+        "--files-from",
+        default="",
+        help="Optional newline-delimited file containing relative files/directories to include in the snapshot.",
+    )
+    parser.add_argument(
+        "--respect-gitignore",
+        action="store_true",
+        help="Also apply a lightweight subset of .gitignore rules when creating the snapshot.",
+    )
     parser.add_argument("--detach", action="store_true", help="Start in the background and return PID/log paths")
     parser.add_argument("--preview-port", type=int, default=0, help=argparse.SUPPRESS)
     parser.add_argument("--approval-mode", default="plan", choices=["default", "auto_edit", "yolo", "plan"])
@@ -244,6 +302,15 @@ def default_output_file() -> Path:
     return root / f"gemini-preview-{stamp}.txt"
 
 
+def effective_hold_seconds(args: argparse.Namespace) -> int:
+    hold = max(0, int(getattr(args, "hold_seconds", 0) or 0))
+    min_preview_hold = max(0, int(getattr(args, "min_preview_hold_seconds", 0) or 0))
+    preview_is_visible = not getattr(args, "no_browser", False) or int(getattr(args, "preview_port", 0) or 0) > 0
+    if preview_is_visible:
+        return max(hold, min_preview_hold)
+    return hold
+
+
 def detach(args: argparse.Namespace, prompt: str, output_path: Path) -> int:
     root = output_path.parent
     root.mkdir(parents=True, exist_ok=True)
@@ -275,10 +342,20 @@ def detach(args: argparse.Namespace, prompt: str, output_path: Path) -> int:
         args.prompt_template,
         "--auto-close-browser-seconds",
         str(args.auto_close_browser_seconds),
+        "--min-preview-hold-seconds",
+        str(args.min_preview_hold_seconds),
+        "--max-snapshot-bytes",
+        str(args.max_snapshot_bytes),
+        "--max-snapshot-files",
+        str(args.max_snapshot_files),
         "--preview-port",
         str(preview_port),
         "--no-browser",
     ]
+    if args.files_from:
+        child_args.extend(["--files-from", str(resolve_cli_file(args.files_from))])
+    if args.respect_gitignore:
+        child_args.append("--respect-gitignore")
     if args.direct_workdir:
         child_args.append("--direct-workdir")
     if args.no_auto_close_browser:
@@ -392,11 +469,65 @@ def make_handler() -> type[BaseHTTPRequestHandler]:
       margin-bottom: 14px;
       white-space: pre-wrap;
     }}
+    .grid {{
+      display: grid;
+      grid-template-columns: minmax(260px, 0.9fr) minmax(320px, 1.6fr);
+      gap: 14px;
+      align-items: start;
+    }}
+    .panel {{
+      border: 1px solid #30363d;
+      border-radius: 8px;
+      background: #0d1117;
+      min-height: 120px;
+      overflow: hidden;
+    }}
+    .panel h2 {{
+      margin: 0;
+      padding: 10px 12px;
+      border-bottom: 1px solid #30363d;
+      color: #c9d1d9;
+      background: #161b22;
+      font-size: 13px;
+      font-weight: 650;
+    }}
+    .panel-body {{ padding: 12px; }}
+    .meta {{
+      display: grid;
+      gap: 6px;
+      color: #8b949e;
+      font: 12px/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      overflow-wrap: anywhere;
+    }}
+    .timeline {{
+      display: grid;
+      gap: 8px;
+      max-height: 360px;
+      overflow: auto;
+    }}
+    .event {{
+      display: grid;
+      grid-template-columns: 64px 1fr;
+      gap: 8px;
+      color: #c9d1d9;
+      font-size: 12px;
+    }}
+    .event-time {{ color: #8b949e; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }}
+    details summary {{
+      cursor: pointer;
+      color: #8b949e;
+      padding: 10px 12px;
+      border-top: 1px solid #30363d;
+      background: #161b22;
+      font-size: 12px;
+    }}
     pre {{
       white-space: pre-wrap;
       word-break: break-word;
       font: 13px/1.6 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
       margin: 0;
+      max-height: 520px;
+      overflow: auto;
     }}
     .done {{ margin-top: 16px; color: #3fb950; }}
     .failed {{ color: #f85149; }}
@@ -410,14 +541,45 @@ def make_handler() -> type[BaseHTTPRequestHandler]:
   </header>
   <div class="wrap">
     <div class="task"><strong>Task preview</strong><br>{prompt}</div>
-    <pre id="output"></pre>
+    <div class="grid">
+      <section class="panel">
+        <h2>Process</h2>
+        <div class="panel-body">
+          <div class="meta">
+            <div>Started: <span id="started"></span></div>
+            <div>Model: <span id="model"></span></div>
+            <div>Stream events: <span id="streamEvents">0</span></div>
+            <div>Snapshot: <span id="snapshotPath"></span></div>
+            <div>Response file: <span id="responseFile"></span></div>
+          </div>
+        </div>
+        <div class="panel-body timeline" id="timeline"></div>
+      </section>
+      <section class="panel">
+        <h2>Parsed Gemini Output</h2>
+        <div class="panel-body"><pre id="output"></pre></div>
+        <details>
+          <summary>Raw stream-json / stderr log</summary>
+          <div class="panel-body"><pre id="rawOutput"></pre></div>
+        </details>
+      </section>
+    </div>
     <div id="done"></div>
   </div>
   <script>
     const output = document.getElementById('output');
+    const rawOutput = document.getElementById('rawOutput');
     const statusEl = document.getElementById('status');
     const doneEl = document.getElementById('done');
+    const timeline = document.getElementById('timeline');
+    const started = document.getElementById('started');
+    const modelEl = document.getElementById('model');
+    const streamEvents = document.getElementById('streamEvents');
+    const snapshotPath = document.getElementById('snapshotPath');
+    const responseFile = document.getElementById('responseFile');
     let lastContent = '';
+    let lastRaw = '';
+    let lastEvents = '';
     let userScrolled = false;
     window.addEventListener('scroll', () => {{
       userScrolled = window.innerHeight + window.scrollY < document.body.scrollHeight - 60;
@@ -425,15 +587,40 @@ def make_handler() -> type[BaseHTTPRequestHandler]:
     function scrollBottom() {{
       if (!userScrolled) window.scrollTo(0, document.body.scrollHeight);
     }}
+    function escapeHtml(value) {{
+      const map = {{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}};
+      return String(value || '').replace(/[&<>"']/g, c => map[c]);
+    }}
     async function tick() {{
       try {{
         const res = await fetch('/state?ts=' + Date.now());
         const state = await res.json();
         statusEl.textContent = state.status + (state.session_id ? ' | ' + state.session_id : '');
+        started.textContent = state.started_at || '';
+        modelEl.textContent = state.model || '';
+        streamEvents.textContent = String(state.stream_events || 0);
+        snapshotPath.textContent = state.snapshot_path || '';
+        responseFile.textContent = state.response_file || '';
+        const eventKey = JSON.stringify(state.events || []);
+        if (eventKey !== lastEvents) {{
+          lastEvents = eventKey;
+          timeline.innerHTML = (state.events || []).map((event) => (
+            '<div class="event"><span class="event-time">' +
+            escapeHtml(event.time) +
+            '</span><span>' +
+            escapeHtml(event.message) +
+            '</span></div>'
+          )).join('');
+          timeline.scrollTop = timeline.scrollHeight;
+        }}
         if (state.content !== lastContent) {{
           lastContent = state.content;
-          output.textContent = state.content || state.raw || '';
+          output.textContent = state.content || '';
           setTimeout(scrollBottom, 0);
+        }}
+        if (state.raw !== lastRaw) {{
+          lastRaw = state.raw;
+          rawOutput.textContent = state.raw || '';
         }}
         if (state.done) {{
           const ok = state.exit_code === 0;
@@ -469,10 +656,12 @@ def start_server(open_browser: bool, port: int = 0) -> tuple[ThreadingHTTPServer
     url = f"http://127.0.0.1:{port}/"
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
+    STATE.add_event(f"Preview server started: {url}")
     print(f"CCG_GEMINI_PREVIEW_URL={url}", flush=True)
     if open_browser:
         opened = open_preview_url(url)
         print(f"CCG_GEMINI_BROWSER_OPENED={1 if opened else 0}", flush=True)
+        STATE.add_event(f"Browser open attempted: {'yes' if opened else 'no'}")
     return server, url
 
 
@@ -506,6 +695,62 @@ def resolve_gemini_invocation() -> list[str]:
     raise SystemExit("ERROR: gemini CLI not found in PATH")
 
 
+def extract_text_node(node: object) -> str:
+    if node is None:
+        return ""
+    if isinstance(node, str):
+        return node
+    if isinstance(node, (int, float, bool)):
+        return ""
+    if isinstance(node, list):
+        return "".join(extract_text_node(item) for item in node)
+    if isinstance(node, dict):
+        text = []
+        node_type = str(node.get("type", "")).lower()
+        if node_type in {"text", "output_text"} and isinstance(node.get("text"), str):
+            text.append(str(node.get("text", "")))
+        for key in ("text", "output_text", "content", "parts", "delta"):
+            if key in node:
+                if key == "text" and node_type in {"text", "output_text"}:
+                    continue
+                text.append(extract_text_node(node.get(key)))
+        return "".join(text)
+    return ""
+
+
+def extract_event_text(event: object) -> str:
+    if not isinstance(event, dict):
+        return ""
+
+    event_type = str(event.get("type", "")).lower()
+    role = str(event.get("role", "")).lower()
+    if role and role not in {"assistant", "model", "gemini"}:
+        return ""
+
+    if event_type == "message":
+        return "".join(
+            extract_text_node(event.get(key))
+            for key in ("content", "parts", "delta", "text", "output_text")
+            if key in event
+        )
+
+    if event_type in {"content", "delta", "chunk", "text", "output_text", "response"}:
+        return "".join(
+            extract_text_node(event.get(key))
+            for key in ("content", "parts", "delta", "text", "output_text")
+            if key in event
+        ) or extract_text_node(event)
+
+    if event_type == "result":
+        return "".join(
+            extract_text_node(event.get(key))
+            for key in ("content", "parts", "response", "text", "output_text")
+            if key in event
+        )
+
+    return ""
+
+
 def stream_output(pipe, output_file, is_stderr: bool = False) -> None:
     for line in pipe:
         if not line:
@@ -529,18 +774,25 @@ def stream_output(pipe, output_file, is_stderr: bool = False) -> None:
         session_id = event.get("session_id") or event.get("sessionId")
         if session_id:
             STATE.update(session_id=session_id)
+        event_count = STATE.increment_stream_events()
+        if event_count <= 5 or event_count % 25 == 0:
+            STATE.add_event(f"stream event {event_count}: {event_type or 'unknown'}")
 
         if event_type == "init":
             STATE.update(status="running")
+            STATE.add_event("Gemini stream initialized")
             continue
 
-        if event_type == "message" and event.get("role") == "assistant":
-            STATE.append_content(str(event.get("content", "")))
-            continue
+        extracted = extract_event_text(event)
+        if extracted:
+            STATE.update(status="streaming")
+            STATE.append_content(extracted)
+            STATE.add_event(f"parsed assistant text chunk: {len(extracted)} chars")
 
         if event_type == "result":
             status = str(event.get("status", "complete"))
             STATE.update(status=status)
+            STATE.add_event(f"Gemini result status: {status}")
 
 
 def is_snapshot_ignored(name: str) -> bool:
@@ -572,6 +824,160 @@ def is_snapshot_link(path: Path) -> bool:
         return True
 
 
+def normalize_relative_path(value: str) -> str:
+    return value.replace("\\", "/").strip("/")
+
+
+def load_pattern_file(path: Path) -> list[str]:
+    if not path.exists() or not path.is_file():
+        return []
+    patterns = []
+    for raw in path.read_text(encoding="utf-8", errors="replace").splitlines():
+        line = raw.strip()
+        if not line or line.startswith("#"):
+            continue
+        patterns.append(line)
+    return patterns
+
+
+def load_snapshot_patterns(source: Path, respect_gitignore: bool) -> list[str]:
+    patterns = load_pattern_file(source / ".ccgignore")
+    if respect_gitignore:
+        patterns.extend(load_pattern_file(source / ".gitignore"))
+    return patterns
+
+
+def pattern_matches(pattern: str, rel_path: str, name: str, is_dir: bool) -> bool:
+    directory_only = pattern.strip().endswith("/")
+    normalized = normalize_relative_path(pattern)
+    if not normalized:
+        return False
+    if directory_only:
+        if not is_dir:
+            return False
+    if normalized.startswith("/"):
+        normalized = normalized.lstrip("/")
+
+    candidates = {rel_path, name}
+    if fnmatch.fnmatch(rel_path, normalized) or fnmatch.fnmatch(name, normalized):
+        return True
+    if "/" in normalized:
+        return rel_path == normalized or rel_path.startswith(normalized + "/")
+    return normalized in candidates
+
+
+def is_user_ignored(patterns: list[str], rel_path: str, name: str, is_dir: bool) -> bool:
+    return any(pattern_matches(pattern, rel_path, name, is_dir) for pattern in patterns)
+
+
+def load_include_paths(files_from: str, source: Path) -> set[str]:
+    if not files_from:
+        return set()
+    include_file = resolve_cli_file(files_from)
+    includes = set()
+    for raw in include_file.read_text(encoding="utf-8", errors="replace").splitlines():
+        line = raw.strip()
+        if not line or line.startswith("#"):
+            continue
+        candidate = Path(line)
+        if candidate.is_absolute():
+            try:
+                line = str(candidate.resolve().relative_to(source.resolve()))
+            except ValueError:
+                continue
+        includes.add(normalize_relative_path(line))
+    return includes
+
+
+def is_included_by_files_from(rel_path: str, includes: set[str], is_dir: bool) -> bool:
+    if not includes:
+        return True
+    if rel_path in includes:
+        return True
+    for include in includes:
+        if rel_path.startswith(include + "/"):
+            return True
+        if is_dir and include.startswith(rel_path + "/"):
+            return True
+    return False
+
+
+def copy_snapshot_tree(source: Path, target: Path, args: argparse.Namespace) -> dict[str, object]:
+    patterns = load_snapshot_patterns(source, bool(getattr(args, "respect_gitignore", False)))
+    includes = load_include_paths(str(getattr(args, "files_from", "") or ""), source)
+    max_bytes = max(0, int(getattr(args, "max_snapshot_bytes", 0) or 0))
+    max_files = max(0, int(getattr(args, "max_snapshot_files", 0) or 0))
+    stats: dict[str, object] = {
+        "files": 0,
+        "dirs": 0,
+        "bytes": 0,
+        "skipped_secret_or_link": 0,
+        "skipped_user_ignore": 0,
+        "skipped_include_filter": 0,
+        "skipped_cap": 0,
+        "skipped_error": 0,
+        "patterns": len(patterns),
+        "includes": len(includes),
+    }
+
+    def bump(key: str, amount: int = 1) -> None:
+        stats[key] = int(stats.get(key, 0)) + amount
+
+    def copy_dir(src: Path, dst: Path, rel: str = "") -> None:
+        try:
+            entries = sorted(src.iterdir(), key=lambda item: item.name.lower())
+        except OSError:
+            bump("skipped_error")
+            return
+
+        dst.mkdir(parents=True, exist_ok=True)
+        bump("dirs")
+        for entry in entries:
+            entry_rel = normalize_relative_path(f"{rel}/{entry.name}" if rel else entry.name)
+            is_dir = entry.is_dir() and not is_snapshot_link(entry)
+
+            if is_snapshot_ignored(entry.name) or is_snapshot_link(entry):
+                bump("skipped_secret_or_link")
+                continue
+            if not is_included_by_files_from(entry_rel, includes, is_dir):
+                bump("skipped_include_filter")
+                continue
+            if is_user_ignored(patterns, entry_rel, entry.name, is_dir):
+                bump("skipped_user_ignore")
+                continue
+
+            if is_dir:
+                copy_dir(entry, dst / entry.name, entry_rel)
+                continue
+            if not entry.is_file():
+                bump("skipped_error")
+                continue
+
+            try:
+                size = entry.stat().st_size
+            except OSError:
+                bump("skipped_error")
+                continue
+            if max_files and int(stats["files"]) + 1 > max_files:
+                bump("skipped_cap")
+                continue
+            if max_bytes and int(stats["bytes"]) + size > max_bytes:
+                bump("skipped_cap")
+                continue
+
+            try:
+                target_file = dst / entry.name
+                target_file.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(entry, target_file)
+                bump("files")
+                bump("bytes", int(size))
+            except OSError:
+                bump("skipped_error")
+
+    copy_dir(source, target)
+    return stats
+
+
 def snapshot_ignore(directory: str, names: list[str]) -> set[str]:
     ignored = set()
     base = Path(directory)
@@ -584,14 +990,36 @@ def snapshot_ignore(directory: str, names: list[str]) -> set[str]:
 def prepare_gemini_workdir(args: argparse.Namespace) -> tuple[Path, tempfile.TemporaryDirectory[str] | None]:
     source = resolve_cli_file(args.workdir)
     if args.direct_workdir:
+        STATE.add_event(f"Using direct workdir: {source}")
         return source, None
 
     temp_dir = tempfile.TemporaryDirectory(prefix="ccg-gemini-snapshot-")
     snapshot_path = Path(temp_dir.name) / source.name
     STATE.update(status="snapshotting")
-    shutil.copytree(source, snapshot_path, ignore=snapshot_ignore)
+    STATE.add_event(f"Creating Gemini snapshot from {source}")
+    stats = copy_snapshot_tree(source, snapshot_path, args)
     print(f"CCG_GEMINI_SNAPSHOT_PATH={snapshot_path}", flush=True)
     print(f"CCG_GEMINI_SNAPSHOT_EXCLUDES={SNAPSHOT_EXCLUDE_SUMMARY}", flush=True)
+    print(f"CCG_GEMINI_SNAPSHOT_FILES={stats['files']}", flush=True)
+    print(f"CCG_GEMINI_SNAPSHOT_BYTES={stats['bytes']}", flush=True)
+    print(
+        "CCG_GEMINI_SNAPSHOT_SKIPPED="
+        f"secret_or_link:{stats['skipped_secret_or_link']},"
+        f"user_ignore:{stats['skipped_user_ignore']},"
+        f"include_filter:{stats['skipped_include_filter']},"
+        f"cap:{stats['skipped_cap']},"
+        f"error:{stats['skipped_error']}",
+        flush=True,
+    )
+    STATE.update(
+        snapshot_path=str(snapshot_path),
+        snapshot_excludes=SNAPSHOT_EXCLUDE_SUMMARY,
+        status="snapshot-ready",
+    )
+    STATE.add_event(
+        f"Snapshot ready: {stats['files']} files, {stats['bytes']} bytes, "
+        f"skipped cap={stats['skipped_cap']}"
+    )
     STATE.update(status="snapshot-ready")
     return snapshot_path, temp_dir
 
@@ -617,9 +1045,11 @@ def run_gemini(args: argparse.Namespace, prompt: str, output_path: Path, gemini_
     env = os.environ.copy()
     env.setdefault("GOOGLE_CLOUD_LOCATION", "global")
     STATE.update(model=args.model, status="starting")
+    STATE.add_event(f"Launching Gemini model {args.model}")
 
     with output_path.open("w", encoding="utf-8", errors="replace") as out:
         out.write(f"$ {' '.join(cmd)}\n\n")
+        STATE.add_event("Gemini process started")
         proc = subprocess.Popen(
             cmd,
             cwd=str(gemini_workdir.resolve()),
@@ -652,9 +1082,11 @@ def run_gemini(args: argparse.Namespace, prompt: str, output_path: Path, gemini_
 
         proc.stdin.write(prompt)
         proc.stdin.close()
+        STATE.add_event("Prompt sent to Gemini stdin")
         code = proc.wait()
         stdout_thread.join(timeout=2)
         stderr_thread.join(timeout=2)
+        STATE.add_event(f"Gemini process exited with code {code}")
         return int(code)
 
 
@@ -668,6 +1100,10 @@ def main() -> int:
 
     output_path = resolve_cli_file(args.output_file) if args.output_file else default_output_file()
     output_path.parent.mkdir(parents=True, exist_ok=True)
+    response_path = output_path.with_suffix(".response.txt")
+    STATE.update(output_file=str(output_path), response_file=str(response_path))
+    STATE.add_event(f"Output file: {output_path}")
+    STATE.add_event(f"Response file: {response_path}")
     if args.detach:
         return detach(args, raw_prompt, output_path)
 
@@ -683,16 +1119,19 @@ def main() -> int:
         gemini_workdir, temp_dir = prepare_gemini_workdir(args)
         gemini_prompt = build_prompt_for_gemini(args, prompt, gemini_workdir)
         code = run_gemini(args, gemini_prompt, output_path, gemini_workdir)
-        STATE.update(done=True, exit_code=code, status="complete" if code == 0 else "failed")
+        STATE.update(status="writing-response")
+        STATE.add_event("Writing parsed Gemini response file")
         response = str(STATE.snapshot().get("content", ""))
-        response_path = output_path.with_suffix(".response.txt")
         response_path.write_text(response, encoding="utf-8", errors="replace")
+        STATE.add_event(f"Response file written: {response_path}")
+        STATE.update(done=True, exit_code=code, status="complete" if code == 0 else "failed")
+        STATE.add_event("Preview will auto-close after completion" if auto_close > 0 else "Preview auto-close disabled")
         print(f"CCG_GEMINI_RESPONSE_FILE={response_path}", flush=True)
         print(f"CCG_GEMINI_EXIT_CODE={code}", flush=True)
         print("CCG_GEMINI_RESPONSE_BEGIN", flush=True)
         print(response, flush=True)
         print("CCG_GEMINI_RESPONSE_END", flush=True)
-        time.sleep(max(0, args.hold_seconds))
+        time.sleep(effective_hold_seconds(args))
         return code
     finally:
         server.shutdown()

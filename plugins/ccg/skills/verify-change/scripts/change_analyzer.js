@@ -8,8 +8,12 @@ const { parseCliArgs, buildReport, hasFatal, DASH } = require(path.join(__dirnam
 
 const CODE_EXT = new Set([".py",".go",".rs",".ts",".js",".jsx",".tsx",".java",".c",".cpp",".h",".hpp"]);
 const DOC_EXT = new Set([".md",".rst",".txt",".adoc"]);
-const TEST_PATTERNS = ["test_","_test.",".test.","spec_","_spec.","/tests/","/test/","/__tests__/"];
-const CONFIG_FILES = new Set(["package.json","pyproject.toml","go.mod","cargo.toml","pom.xml","makefile","dockerfile"]);
+const TEST_PATTERNS = [
+  "test_","_test.",".test.","spec_","_spec.","fixture-tests","/tests/","/test/","/__tests__/"
+];
+const CONFIG_FILES = new Set([
+  "package.json","pyproject.toml","go.mod","cargo.toml","pom.xml","makefile","dockerfile"
+]);
 const CONFIG_EXT = new Set([".yaml",".yml",".json",".toml",".ini"]);
 
 function normalizePath(p) {

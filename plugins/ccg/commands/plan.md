@@ -21,4 +21,5 @@ This command is Codex-native:
 - Do not write or present a final plan unless the helper printed `CCG_GEMINI_RESPONSE_FILE` and Codex read a non-empty response from that file.
 - Do not call Claude-side wrappers or spend Claude execution quota.
 - Do not modify product code. This command may only write or revise CCG plan files under `.claude/plan/`.
+- All user-facing output for this command must be Chinese by default, including usage/help, progress summaries, questions, failure reports, saved-plan summaries, and the next manual command.
 - After writing the plan, show the saved path and the next manual command: `/ccg:execute <plan-path>`.

@@ -1,5 +1,7 @@
 # CCG Codex Workflow
 
+[![CI](https://github.com/jed-zed/ccg-codex-workflow/actions/workflows/ci.yml/badge.svg)](https://github.com/jed-zed/ccg-codex-workflow/actions/workflows/ci.yml)
+
 Codex-native CCG workflow plugin.
 
 This project rewrites CCG execution around Codex:
@@ -104,6 +106,15 @@ Execute /ccg:plan Add a smoke-test-only plan
 Execute /ccg:gemini-preview Reply exactly: CCG_OK
 ```
 
+For a release-readiness smoke test, verify all of the following on the target machine:
+
+- `codex debug prompt-input | Select-String "ccg:"` shows `ccg:doctor`, `ccg:plan`, and `ccg:execute`.
+- `codex mcp list` shows the expected plugin or global MCP entries.
+- `/ccg:doctor` reports no `FAIL`.
+- `/ccg:gemini-preview Reply exactly: CCG_OK` opens the browser preview automatically and writes a non-empty `CCG_GEMINI_RESPONSE_FILE` containing `CCG_OK`.
+- `/ccg:plan <small smoke requirement>` asks Gemini through the preview helper, writes only `.claude/plan/*.md`, and replies in Chinese.
+- GitHub Actions is green on both Ubuntu and Windows before publishing a stable release.
+
 The plugin provides these prompt invocations and matching skills:
 
 ```text
@@ -175,11 +186,18 @@ Create a Codex-native CCG plan:
 
 Real `/ccg:plan` runs require Gemini participation. Codex must launch the preview helper, read a non-empty `CCG_GEMINI_RESPONSE_FILE`, and include Codex/Gemini analysis before writing `.claude/plan/*.md`. If Gemini fails, planning stops instead of producing a fake dual-model plan.
 
+`/ccg:plan` user-facing output is Chinese by default. English remains acceptable for literal commands, paths, generated slugs, model names, environment variables, code identifiers, and clearly labeled raw Gemini excerpts.
+
 Execute a CCG plan:
 
 ```text
 /ccg:execute .claude/plan/my-task.md
 ```
+
+Execution has two practical Gemini policies:
+
+- **Fast**: simple, backend-heavy changes may be Codex-only unless the plan or risk level calls for Gemini.
+- **Strict**: high-risk, UI-heavy, broad refactors, or release-sensitive work should use Gemini through the preview helper for a bounded second-pass review.
 
 Use the typo-compatible alias:
 
@@ -232,6 +250,8 @@ The plugin includes MCP entries for `context7` and `fast-context`.
 
 Secret-backed MCP servers such as `ace-tool` and `grok-search` should be configured globally in Codex, not committed into this repository. See `docs/optional-mcp.md`.
 
+Migrating from the original Claude-led CCG workflow is covered in `docs/migration-from-claude-ccg.md`.
+
 ## Gemini Preview Helper
 
 The helper script is bundled at:
@@ -246,7 +266,9 @@ It runs Gemini with `stream-json`, creates a disposable workspace snapshot by de
 ~/.codex/ccg/logs/
 ```
 
-Snapshots exclude common secret files and directories such as `.env`, `.env.*`, `*.pem`, `*.key`, `*.p12`, `*.pfx`, `id_rsa`, `id_ed25519`, `.aws`, `.gcp`, and `.azure`. They also ignore symlinks and Windows junctions so a repository link cannot pull external secrets into the Gemini snapshot. The helper prints `CCG_GEMINI_SNAPSHOT_PATH` and `CCG_GEMINI_SNAPSHOT_EXCLUDES` for auditability.
+Snapshots exclude common secret files and directories such as `.env`, `.env.*`, `*.pem`, `*.key`, `*.p12`, `*.pfx`, `id_rsa`, `id_ed25519`, `.aws`, `.gcp`, and `.azure`. They also ignore symlinks and Windows junctions so a repository link cannot pull external secrets into the Gemini snapshot. The helper prints `CCG_GEMINI_SNAPSHOT_PATH`, `CCG_GEMINI_SNAPSHOT_EXCLUDES`, copied file/byte counts, and skipped-file categories for auditability.
+
+For large repositories, add a repo-local `.ccgignore` to exclude generated or irrelevant context from Gemini snapshots. The helper supports a lightweight ignore subset: blank lines and `#` comments are ignored; basename patterns, simple relative paths, directory patterns ending in `/`, and `*` wildcards are supported. You can also pass `--respect-gitignore`, `--max-snapshot-bytes`, `--max-snapshot-files`, or `--files-from <list.txt>` for targeted snapshots. Hardcoded secret and link exclusions always win over user include rules.
 
 Smoke test:
 
@@ -256,7 +278,7 @@ python .\plugins\ccg\skills\ccg-executor\scripts\invoke_gemini_preview.py --work
 
 The default Gemini model is `gemini-3.1-pro-preview`. You can override it with `GEMINI_MODEL` or `--model`.
 
-Gemini helper prompts use bundled CCG templates by default. Use `--prompt-template general|plan|prototype|review|frontend`; use `none` only for debugging the wrapper. These templates are adapted from the original CCG role prompts, but rewritten so Codex owns orchestration, file edits, verification, and final delivery while Gemini remains a read-only helper. Browser preview tabs attempt to close themselves after completion, defaulting to 3 seconds; pass `--no-auto-close-browser` to keep the preview open.
+Gemini helper prompts use bundled CCG templates by default. Use `--prompt-template general|plan|prototype|review|frontend`; use `none` only for debugging the wrapper. These templates are adapted from the original CCG role prompts, but rewritten so Codex owns orchestration, file edits, verification, and final delivery while Gemini remains a read-only helper. The browser preview shows a live process timeline, parsed Gemini output, and a raw stream-json/debug pane. Preview tabs attempt to close themselves after completion, defaulting to 3 seconds; pass `--no-auto-close-browser` to keep the preview open. The response file remains the source of truth if browser focus, polling, or auto-close behavior hides the final output.
 
 Use `--direct-workdir` only when you explicitly want Gemini to run against the real workspace.
 
@@ -269,3 +291,5 @@ node .\scripts\run-fixture-tests.js
 ```
 
 `verify-quality` scans JavaScript and TypeScript-family files, including `.jsx` and `.tsx`, with a dependency-free structural AST-lite pass for functions, classes, methods, parameters, length, and branching complexity. It is not a full Babel/TypeScript parser and is not type-aware, so keep using the target project's own lint/typecheck for deep language checks.
+
+The CCG verification scripts are heuristic gates. They are useful preflight checks for common change, quality, module, and security issues, but they do not replace project-native tests, typechecks, linters, Semgrep, CodeQL, dependency scanning, or manual review for high-risk code.
