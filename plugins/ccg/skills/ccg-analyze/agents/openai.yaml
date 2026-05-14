@@ -1,0 +1,3 @@
+display_name: CCG Analyze
+short_description: Analyze code or architecture without applying changes.
+default_prompt: /ccg:analyze Analyze this module

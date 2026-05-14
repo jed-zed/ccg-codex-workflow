@@ -1,0 +1,3 @@
+display_name: CCG Backend
+short_description: Implement backend work with Codex as primary executor.
+default_prompt: /ccg:backend Implement the backend task

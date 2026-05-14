@@ -19,6 +19,14 @@ If the user provided no argument, answer in Chinese with the CCG command index:
 - `/ccg:execute <plan>` - execute a CCG plan with Codex as orchestrator.
 - `/ccg:codex-exec <plan>` - explicit Codex-led execution alias.
 - `/ccg:excute <plan>` - typo-compatible alias.
+- `/ccg:feat <task>` - implement a feature with Codex and bounded Gemini help.
+- `/ccg:frontend <task>` - handle frontend/UI work with Gemini as a strong read-only UI helper.
+- `/ccg:backend <task>` - handle backend-heavy work with Codex as the primary executor.
+- `/ccg:analyze <target>` - read-only code, architecture, risk, or option analysis.
+- `/ccg:debug <bug>` - reproduce, diagnose, fix, and verify failures.
+- `/ccg:optimize <target>` - optimize with evidence, tests, and regression checks.
+- `/ccg:test <target>` - add, repair, or design tests.
+- `/ccg:enhance <task>` - enhance existing behavior while preserving local patterns.
 - `/ccg:review [plan-or-diff]` - review a CCG implementation.
 - `/ccg:gemini-preview <prompt>` - manual smoke-test/debug entry for the same browser preview helper used automatically by CCG workflow Gemini calls.
 - `/ccg:gen-docs <module-path>` - generate README/DESIGN skeletons for a new module.

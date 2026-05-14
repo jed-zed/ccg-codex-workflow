@@ -115,6 +115,12 @@ For a release-readiness smoke test, verify all of the following on the target ma
 - `/ccg:plan <small smoke requirement>` asks Gemini through the preview helper, writes only `.claude/plan/*.md`, and replies in Chinese.
 - GitHub Actions is green on both Ubuntu and Windows before publishing a stable release.
 
+### Original CCG Parity Status
+
+The original CCG workflow exposes a broader 29+ command surface. This Codex-native plugin now has the core planner/executor/review/doctor gates plus the first high-frequency parity group: `/ccg:feat`, `/ccg:frontend`, `/ccg:backend`, `/ccg:analyze`, `/ccg:debug`, `/ccg:optimize`, `/ccg:test`, and `/ccg:enhance`.
+
+The detailed tracking table lives in `docs/original-ccg-parity-matrix.md`. Later parity phases cover Git/context helpers, OPSX/spec commands, team workflows, domain skills, Impeccable UI, and Scrapling. Claude wrapper behavior and legacy `SESSION_ID` resume are intentionally not copied.
+
 The plugin provides these prompt invocations and matching skills:
 
 ```text
@@ -125,6 +131,14 @@ The plugin provides these prompt invocations and matching skills:
 /ccg:excute
 /ccg:codex-exec
 /ccg:workflow
+/ccg:feat
+/ccg:frontend
+/ccg:backend
+/ccg:analyze
+/ccg:debug
+/ccg:optimize
+/ccg:test
+/ccg:enhance
 /ccg:review
 /ccg:gemini-preview
 /ccg:gen-docs
@@ -192,6 +206,16 @@ Execute a CCG plan:
 
 ```text
 /ccg:execute .claude/plan/my-task.md
+```
+
+Implement a feature directly through the high-frequency command surface:
+
+```text
+/ccg:feat Add user login audit logging
+/ccg:backend Add the audit log API
+/ccg:frontend Improve the audit log table
+/ccg:debug Fix the failing audit log test
+/ccg:test Add audit log edge-case coverage
 ```
 
 Execution has two practical Gemini policies:
@@ -278,7 +302,7 @@ python .\plugins\ccg\skills\ccg-executor\scripts\invoke_gemini_preview.py --work
 
 The default Gemini model is `gemini-3.1-pro-preview`. You can override it with `GEMINI_MODEL` or `--model`.
 
-Gemini helper prompts use bundled CCG templates by default. Use `--prompt-template general|plan|prototype|review|frontend`; use `none` only for debugging the wrapper. These templates are adapted from the original CCG role prompts, but rewritten so Codex owns orchestration, file edits, verification, and final delivery while Gemini remains a read-only helper. The browser preview shows a live process timeline, parsed Gemini output, and a raw stream-json/debug pane. Preview tabs attempt to close themselves after completion, defaulting to 3 seconds; pass `--no-auto-close-browser` to keep the preview open. The response file remains the source of truth if browser focus, polling, or auto-close behavior hides the final output.
+Gemini helper prompts use bundled CCG templates by default. Use `--prompt-template general|plan|prototype|review|frontend|analyzer|architect|debugger|optimizer|tester`; use `none` only for debugging the wrapper. These templates are adapted from the original CCG role prompts, but rewritten so Codex owns orchestration, file edits, verification, and final delivery while Gemini remains a read-only helper. The browser preview shows a live process timeline, parsed Gemini output, and a raw stream-json/debug pane. Preview tabs attempt to close themselves after completion, defaulting to 3 seconds; pass `--no-auto-close-browser` to keep the preview open. The response file remains the source of truth if browser focus, polling, or auto-close behavior hides the final output.
 
 Use `--direct-workdir` only when you explicitly want Gemini to run against the real workspace.
 

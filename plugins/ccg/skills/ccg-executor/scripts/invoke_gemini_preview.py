@@ -26,7 +26,19 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 PROMPT_TEMPLATE_DIR = Path(__file__).resolve().parent.parent / "templates" / "gemini"
-PROMPT_TEMPLATES = ("none", "general", "plan", "prototype", "review", "frontend")
+PROMPT_TEMPLATES = (
+    "none",
+    "general",
+    "plan",
+    "prototype",
+    "review",
+    "frontend",
+    "analyzer",
+    "architect",
+    "debugger",
+    "optimizer",
+    "tester",
+)
 
 
 class State:

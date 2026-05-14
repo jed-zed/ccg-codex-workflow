@@ -1,0 +1,3 @@
+display_name: CCG Test
+short_description: Add or repair tests with Codex as implementer.
+default_prompt: /ccg:test Add focused tests
