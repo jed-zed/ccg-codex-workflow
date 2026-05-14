@@ -47,9 +47,17 @@ Execute /ccg:execute .claude/plan/my-task.md
 
 ```powershell
 codex plugin marketplace add I:\ai\ccg-codex-workflow
-codex skills list
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\doctor.ps1 -Verbose
 codex mcp list
 codex debug prompt-input | Select-String "ccg:"
+```
+
+`doctor.ps1` is read-only. It checks the plugin files, Codex plugin cache, prompt-visible `ccg:*` skills, MCP visibility, optional command bridge files, and Gemini CLI presence. It cannot prove slash-menu autocomplete, because that depends on the Codex TUI build; use prompt-text invocation when autocomplete is absent.
+
+For machine-readable output:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\doctor.ps1 -Json
 ```
 
 If your Codex build supports command discovery, also try:

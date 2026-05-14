@@ -40,6 +40,19 @@ function validateJson() {
   console.log(`json ok - ${files.length} file(s)`);
 }
 
+function validateScripts() {
+  const files = [
+    "scripts/doctor.ps1",
+    "scripts/install-codex-command-bridge.ps1",
+    "scripts/uninstall-codex-command-bridge.ps1",
+  ];
+  for (const file of files) {
+    const full = path.join(repoRoot, file);
+    if (!fs.existsSync(full)) fail(`missing script: ${file}`);
+  }
+  console.log(`scripts ok - ${files.length} file(s)`);
+}
+
 function validateSkills() {
   const skillsDir = path.join(repoRoot, "plugins", "ccg", "skills");
   const skillFiles = walk(skillsDir, (file) => path.basename(file) === "SKILL.md");
@@ -70,6 +83,7 @@ function nodeCheck() {
 
 function main() {
   validateJson();
+  validateScripts();
   validateSkills();
   nodeCheck();
 }
