@@ -14,10 +14,15 @@ const MAX_PARAMETERS = 5;
 const MIN_FUNCTION_NAME_LENGTH = 2;
 
 const EXCLUDE_DIRS = new Set(['.git', 'node_modules', '__pycache__', '.venv', 'venv', 'dist', 'build', '.tox']);
-const CODE_EXTENSIONS = new Set(['.py', '.js', '.ts', '.go', '.java', '.rs', '.c', '.cpp']);
+const CODE_EXTENSIONS = new Set([
+  '.py', '.js', '.ts', '.jsx', '.tsx', '.mjs', '.cjs', '.mts', '.cts',
+  '.go', '.java', '.rs', '.c', '.cpp',
+]);
 
 const COMMENT_PREFIXES = {
-  '.js': '//', '.ts': '//', '.go': '//', '.java': '//',
+  '.js': '//', '.ts': '//', '.jsx': '//', '.tsx': '//',
+  '.mjs': '//', '.cjs': '//', '.mts': '//', '.cts': '//',
+  '.go': '//', '.java': '//',
   '.c': '//', '.cpp': '//', '.rs': '//',
 };
 

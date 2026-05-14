@@ -33,6 +33,39 @@ Execute /ccg:plan Add user login audit logging
 Execute /ccg:execute .claude/plan/my-task.md
 ```
 
+### Codex Compatibility Matrix
+
+| Capability | Codex CLI 0.130 | Expected behavior |
+|------------|-----------------|-------------------|
+| Plugin skills | Supported | `codex debug prompt-input` should list `ccg:*` skills after install/restart. |
+| Plugin MCP entries | Supported | `codex mcp list` should show configured plugin MCP servers when available. |
+| Marketplace command autocomplete | Not guaranteed | `/ccg:*` may not appear in the TUI slash menu. |
+| Prompt-text invocation | Supported | Type `/ccg:plan ...`, `/ccg:execute ...`, or prefix with `Execute ...` if slash input is intercepted. |
+| Command bridge | Client-dependent | `scripts/install-codex-command-bridge.ps1` helps only clients that discover `~/.codex/commands`. |
+
+### Smoke Test After Install
+
+```powershell
+codex plugin marketplace add I:\ai\ccg-codex-workflow
+codex skills list
+codex mcp list
+codex debug prompt-input | Select-String "ccg:"
+```
+
+If your Codex build supports command discovery, also try:
+
+```text
+/commands list
+/commands reload
+```
+
+Then in Codex, test prompt-text routing with:
+
+```text
+Execute /ccg:plan Add a smoke-test-only plan
+Execute /ccg:gemini-preview Reply exactly: CCG_OK
+```
+
 The plugin provides these prompt invocations and matching skills:
 
 ```text
@@ -155,6 +188,8 @@ It runs Gemini with `stream-json`, creates a disposable workspace snapshot by de
 ~/.codex/ccg/logs/
 ```
 
+Snapshots exclude common secret files and directories such as `.env`, `.env.*`, `*.pem`, `*.key`, `*.p12`, `*.pfx`, `id_rsa`, `id_ed25519`, `.aws`, `.gcp`, and `.azure`. The helper prints `CCG_GEMINI_SNAPSHOT_PATH` and `CCG_GEMINI_SNAPSHOT_EXCLUDES` for auditability.
+
 Smoke test:
 
 ```powershell
@@ -166,6 +201,9 @@ Use `--direct-workdir` only when you explicitly want Gemini to run against the r
 ## Development Checks
 
 ```powershell
-node -e "JSON.parse(require('fs').readFileSync('.agents/plugins/marketplace.json','utf8')); JSON.parse(require('fs').readFileSync('plugins/ccg/.codex-plugin/plugin.json','utf8')); JSON.parse(require('fs').readFileSync('plugins/ccg/.mcp.json','utf8')); console.log('json ok')"
+node .\scripts\validate-plugin.js
 python -m py_compile .\plugins\ccg\skills\ccg-executor\scripts\invoke_gemini_preview.py
+node .\scripts\run-fixture-tests.js
 ```
+
+`verify-quality` scans frontend file extensions including `.jsx` and `.tsx`, but JavaScript and TypeScript still use a lightweight generic scan. Use the project's own lint/typecheck for deep JS/TS complexity and type-aware checks.

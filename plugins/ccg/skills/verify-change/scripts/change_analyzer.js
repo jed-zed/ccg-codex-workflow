@@ -66,15 +66,9 @@ function git(...args) {
   catch { return ""; }
 }
 
-function getGitChanges(base = "HEAD~1", target = "HEAD") {
-  const changes = [];
-  for (const line of git('diff', '--name-status', base, target).split("\n")) {
-    if (!line) continue;
-    const c = parseNameStatusLine(line);
-    if (c) changes.push(c);
-  }
+function parseNumstat(output) {
   const statMap = {};
-  for (const line of git('diff', '--numstat', base, target).split("\n")) {
+  for (const line of output.split("\n")) {
     if (!line) continue;
     const parts = line.split("\t");
     if (parts.length >= 3) {
@@ -84,10 +78,24 @@ function getGitChanges(base = "HEAD~1", target = "HEAD") {
       ];
     }
   }
+  return statMap;
+}
+
+function applyNumstat(changes, statMap) {
   for (const c of changes) {
     if (statMap[c.path]) { [c.additions, c.deletions] = statMap[c.path]; }
   }
   return changes;
+}
+
+function getGitChanges(base = "HEAD~1", target = "HEAD") {
+  const changes = [];
+  for (const line of git('diff', '--name-status', base, target).split("\n")) {
+    if (!line) continue;
+    const c = parseNameStatusLine(line);
+    if (c) changes.push(c);
+  }
+  return applyNumstat(changes, parseNumstat(git('diff', '--numstat', base, target)));
 }
 
 function getStagedChanges() {
@@ -97,7 +105,7 @@ function getStagedChanges() {
     const c = parseNameStatusLine(line);
     if (c) changes.push(c);
   }
-  return changes;
+  return applyNumstat(changes, parseNumstat(git('diff', '--cached', '--numstat')));
 }
 
 function getWorkingChanges() {
@@ -107,7 +115,7 @@ function getWorkingChanges() {
     const c = parsePorcelainLine(line);
     if (c) changes.push(c);
   }
-  return changes;
+  return applyNumstat(changes, parseNumstat(git('diff', '--numstat')));
 }
 
 function isPathInModule(filePath, mod) {

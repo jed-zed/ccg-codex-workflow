@@ -73,6 +73,57 @@ class State:
 
 STATE = State()
 
+SNAPSHOT_IGNORED_NAMES = {
+    ".git",
+    ".hg",
+    ".svn",
+    ".idea",
+    ".vscode",
+    "__pycache__",
+    ".pytest_cache",
+    ".mypy_cache",
+    ".ruff_cache",
+    ".next",
+    ".nuxt",
+    ".turbo",
+    ".cache",
+    "node_modules",
+    "vendor",
+    "dist",
+    "build",
+    "target",
+    "coverage",
+    ".venv",
+    "venv",
+    "env",
+    ".aws",
+    ".gcp",
+    ".azure",
+    ".ssh",
+    "id_rsa",
+    "id_ed25519",
+}
+SNAPSHOT_IGNORED_SUFFIXES = (
+    ".pyc",
+    ".pyo",
+    ".log",
+    ".tmp",
+    ".pem",
+    ".key",
+    ".p12",
+    ".pfx",
+    ".crt",
+)
+SNAPSHOT_IGNORED_PREFIXES = (
+    ".env.",
+    "credentials",
+    "service-account",
+)
+SNAPSHOT_EXCLUDE_SUMMARY = (
+    ".env,.env.*,*.pem,*.key,*.p12,*.pfx,*.crt,id_rsa,id_ed25519,"
+    ".aws,.gcp,.azure,.ssh,credentials*,service-account*.json"
+)
+
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Run Gemini with browser preview")
@@ -435,33 +486,21 @@ def stream_reader(pipe, output_file, is_stderr: bool = False) -> None:
             STATE.update(status=status)
 
 
+def is_snapshot_ignored(name: str) -> bool:
+    lower = name.lower()
+    if lower in SNAPSHOT_IGNORED_NAMES:
+        return True
+    if lower == ".env" or lower.startswith(SNAPSHOT_IGNORED_PREFIXES):
+        return True
+    if lower.endswith(SNAPSHOT_IGNORED_SUFFIXES):
+        return True
+    if lower.startswith("service-account") and lower.endswith(".json"):
+        return True
+    return False
+
+
 def snapshot_ignore(_directory: str, names: list[str]) -> set[str]:
-    ignored_names = {
-        ".git",
-        ".hg",
-        ".svn",
-        ".idea",
-        ".vscode",
-        "__pycache__",
-        ".pytest_cache",
-        ".mypy_cache",
-        ".ruff_cache",
-        ".next",
-        ".nuxt",
-        ".turbo",
-        ".cache",
-        "node_modules",
-        "vendor",
-        "dist",
-        "build",
-        "target",
-        "coverage",
-        ".venv",
-        "venv",
-        "env",
-    }
-    ignored_suffixes = (".pyc", ".pyo", ".log", ".tmp")
-    return {name for name in names if name in ignored_names or name.endswith(ignored_suffixes)}
+    return {name for name in names if is_snapshot_ignored(name)}
 
 
 def prepare_gemini_workdir(args: argparse.Namespace) -> tuple[Path, tempfile.TemporaryDirectory[str] | None]:
@@ -473,6 +512,8 @@ def prepare_gemini_workdir(args: argparse.Namespace) -> tuple[Path, tempfile.Tem
     snapshot_path = Path(temp_dir.name) / source.name
     STATE.update(status="snapshotting")
     shutil.copytree(source, snapshot_path, ignore=snapshot_ignore)
+    print(f"CCG_GEMINI_SNAPSHOT_PATH={snapshot_path}", flush=True)
+    print(f"CCG_GEMINI_SNAPSHOT_EXCLUDES={SNAPSHOT_EXCLUDE_SUMMARY}", flush=True)
     STATE.update(status="snapshot-ready")
     return snapshot_path, temp_dir
 

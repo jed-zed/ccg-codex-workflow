@@ -157,21 +157,62 @@ const CODE_EXTENSIONS = new Set([
   '.py', '.js', '.ts', '.jsx', '.tsx', '.go',
   '.java', '.php', '.rb', '.yaml', '.yml', '.json',
 ]);
+const SECRET_RULE_IDS = new Set([
+  'HARDCODED_SECRET',
+  'HARDCODED_AWS_KEY',
+  'HARDCODED_PRIVATE_KEY',
+]);
 const DEFAULT_EXCLUDES = [
   '.git', 'node_modules', '__pycache__', '.venv', 'venv',
   'dist', 'build', '.tox', 'tests', 'test', '__tests__', 'spec',
 ];
 
+function extensionKeys(filePath) {
+  const base = path.basename(filePath).toLowerCase();
+  const ext = path.extname(base);
+  const keys = new Set();
+  if (ext) keys.add(ext);
+  if (base === '.env' || base.startsWith('.env.')) keys.add('.env');
+  return keys;
+}
+
+function isProbablyTextFile(filePath) {
+  let buffer;
+  try {
+    const fd = fs.openSync(filePath, 'r');
+    try {
+      buffer = Buffer.alloc(4096);
+      const bytes = fs.readSync(fd, buffer, 0, buffer.length, 0);
+      buffer = buffer.subarray(0, bytes);
+    } finally {
+      fs.closeSync(fd);
+    }
+  } catch {
+    return false;
+  }
+  if (!buffer.length) return true;
+  return !buffer.includes(0);
+}
+
+function ruleAppliesToFile(rule, filePath) {
+  const exts = rule.extensions;
+  const keys = extensionKeys(filePath);
+  if (exts.includes('*')) return true;
+  if (SECRET_RULE_IDS.has(rule.id) && isProbablyTextFile(filePath)) return true;
+  for (const key of keys) {
+    if (exts.includes(key)) return true;
+  }
+  return false;
+}
+
 function scanFile(filePath, rules) {
   const findings = [];
-  const ext = path.extname(filePath).toLowerCase();
   let content;
   try { content = fs.readFileSync(filePath, 'utf-8'); } catch { return findings; }
   const lines = content.split('\n');
 
   for (const rule of rules) {
-    const exts = rule.extensions;
-    if (!exts.includes('*') && !exts.includes(ext)) continue;
+    if (!ruleAppliesToFile(rule, filePath)) continue;
 
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i];
@@ -210,7 +251,9 @@ function walkDir(dir, excludeDirs) {
     const full = path.join(dir, entry.name);
     if (entry.isDirectory()) { results.push(...walkDir(full, excludeDirs)); }
     else if (entry.isFile()) {
-      if (CODE_EXTENSIONS.has(path.extname(entry.name).toLowerCase())) {
+      const keys = extensionKeys(entry.name);
+      const isCode = [...keys].some((ext) => CODE_EXTENSIONS.has(ext));
+      if (isCode || isProbablyTextFile(full)) {
         results.push(full);
       }
     }
@@ -280,4 +323,4 @@ if (require.main === module) {
   main();
 }
 
-module.exports = { scanFile, SECURITY_RULES };
+module.exports = { scanFile, scanDirectory, walkDir, SECURITY_RULES };

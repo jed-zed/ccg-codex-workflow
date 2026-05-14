@@ -66,6 +66,8 @@ python "<path-to-this-skill>\scripts\invoke_gemini_preview.py" --workdir "<repo-
 
 Resolve `<path-to-this-skill>` from this `SKILL.md` directory. This helper creates a disposable snapshot of the workspace by default, starts a localhost browser preview, streams Gemini `stream-json` output into the page, and writes the raw output under `~/.codex/ccg/logs/`. It mirrors the original CCG `codeagent-wrapper` Web UI behavior without calling the Claude-side wrapper.
 
+The disposable snapshot excludes common secret files and credential directories such as `.env`, `.env.*`, `*.pem`, `*.key`, `*.p12`, `*.pfx`, `id_rsa`, `id_ed25519`, `.aws`, `.gcp`, and `.azure`. The helper prints `CCG_GEMINI_SNAPSHOT_PATH` and `CCG_GEMINI_SNAPSHOT_EXCLUDES`; if a task truly needs one of those files, ask the user for a sanitized excerpt instead of copying secrets into Gemini context.
+
 Use `--no-browser` only for quick smoke tests or when the user explicitly wants headless execution. For long-running background delegation, add `--detach`; the parent process now reserves the preview port, waits for the preview server, opens the browser itself, and prints `CCG_GEMINI_PREVIEW_URL`, `CCG_GEMINI_BROWSER_OPENED`, `CCG_GEMINI_PREVIEW_PID`, `CCG_GEMINI_OUTPUT_FILE`, `CCG_GEMINI_RESPONSE_FILE`, and `CCG_GEMINI_LAUNCHER_LOG`. Later read the response file before acting on Gemini's suggestions. Use `--direct-workdir` only when the user explicitly accepts that Gemini may touch the real workspace.
 
 Gemini prompts should include:

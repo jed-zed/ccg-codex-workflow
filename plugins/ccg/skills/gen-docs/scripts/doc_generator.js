@@ -345,9 +345,17 @@ function generateDesign(info) {
 
 // --- Core: generate_docs ---
 
-function generateDocs(targetPath, force) {
+function generateDocs(targetPath, force, options = {}) {
   const modPath = path.resolve(targetPath);
   const result = { readme: null, design: null, status: 'success', messages: [] };
+  const readmeOnly = Boolean(options.readmeOnly);
+  const designOnly = Boolean(options.designOnly);
+
+  if (readmeOnly && designOnly) {
+    result.status = 'error';
+    result.messages.push('--readme-only and --design-only cannot be used together');
+    return result;
+  }
 
   if (!fs.existsSync(modPath)) {
     result.status = 'error';
@@ -358,7 +366,9 @@ function generateDocs(targetPath, force) {
   const info = analyzeModule(modPath);
 
   const readmePath = path.join(modPath, 'README.md');
-  if (fs.existsSync(readmePath) && !force) {
+  if (designOnly) {
+    result.messages.push('README.md skipped by --design-only');
+  } else if (fs.existsSync(readmePath) && !force) {
     result.messages.push('README.md 已存在，跳过（使用 --force 覆盖）');
   } else {
     fs.writeFileSync(readmePath, generateReadme(info));
@@ -367,7 +377,9 @@ function generateDocs(targetPath, force) {
   }
 
   const designPath = path.join(modPath, 'DESIGN.md');
-  if (fs.existsSync(designPath) && !force) {
+  if (readmeOnly) {
+    result.messages.push('DESIGN.md skipped by --readme-only');
+  } else if (fs.existsSync(designPath) && !force) {
     result.messages.push('DESIGN.md 已存在，跳过（使用 --force 覆盖）');
   } else {
     fs.writeFileSync(designPath, generateDesign(info));
@@ -400,7 +412,10 @@ function parseArgs(argv) {
 
 function main() {
   const args = parseArgs(process.argv);
-  const result = generateDocs(args.path, args.force);
+  const result = generateDocs(args.path, args.force, {
+    readmeOnly: args.readmeOnly,
+    designOnly: args.designOnly,
+  });
 
   if (args.json) {
     process.stdout.write(JSON.stringify(result, null, 2) + '\n');
