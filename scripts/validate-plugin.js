@@ -116,6 +116,17 @@ function validateDoctorFixDocs() {
   console.log("doctor fix docs ok");
 }
 
+function validateCiActions() {
+  const workflow = fs.readFileSync(path.join(repoRoot, ".github/workflows/ci.yml"), "utf8");
+  for (const action of ["actions/checkout@v6", "actions/setup-node@v6", "actions/setup-python@v6"]) {
+    if (!workflow.includes(action)) fail(`CI workflow must use Node 24-compatible action: ${action}`);
+  }
+  for (const action of ["actions/checkout@v4", "actions/setup-node@v4", "actions/setup-python@v5"]) {
+    if (workflow.includes(action)) fail(`CI workflow still uses Node 20-backed action: ${action}`);
+  }
+  console.log("ci actions ok");
+}
+
 function validateSkills() {
   const skillsDir = path.join(repoRoot, "plugins", "ccg", "skills");
   const skillFiles = walk(skillsDir, (file) => path.basename(file) === "SKILL.md");
@@ -149,6 +160,7 @@ function main() {
   validateScripts();
   validateGeminiDefaults();
   validateDoctorFixDocs();
+  validateCiActions();
   validateSkills();
   nodeCheck();
 }
