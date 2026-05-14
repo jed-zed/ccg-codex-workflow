@@ -1,0 +1,3 @@
+display_name: CCG Doctor
+short_description: Diagnose local CCG Codex plugin installation.
+default_prompt: /ccg:doctor

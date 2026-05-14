@@ -35,6 +35,7 @@
     "privacyPolicyURL": "https://github.com/jed-zed/ccg-codex-workflow",
     "termsOfServiceURL": "https://github.com/jed-zed/ccg-codex-workflow",
     "defaultPrompt": [
+      "/ccg:doctor",
       "/ccg:plan Add the requested feature",
       "/ccg:execute .claude/plan/task.md",
       "/ccg:gemini-preview Review this plan",

@@ -19,9 +19,10 @@ codex plugin marketplace add I:\ai\ccg-codex-workflow
 
 Restart the currently open Codex TUI session so plugin skills and MCP entries reload.
 
-Codex CLI 0.130 loads this plugin's skills, but it does not currently expose marketplace plugin commands as custom slash-command autocomplete entries in the TUI. A computer reboot is not needed. If `/ccg:plan` or `/ccg:execute` does not appear in the autocomplete menu, type the invocation as normal prompt text:
+Codex CLI 0.130 loads this plugin's skills, but it does not currently expose marketplace plugin commands as custom slash-command autocomplete entries in the TUI. A computer reboot is not needed. If `/ccg:doctor`, `/ccg:plan`, or `/ccg:execute` does not appear in the autocomplete menu, type the invocation as normal prompt text:
 
 ```text
+/ccg:doctor
 /ccg:plan Add user login audit logging
 /ccg:execute .claude/plan/my-task.md
 ```
@@ -29,6 +30,7 @@ Codex CLI 0.130 loads this plugin's skills, but it does not currently expose mar
 If a TUI build intercepts unknown leading-slash input before the model sees it, prefix the prompt:
 
 ```text
+Execute /ccg:doctor
 Execute /ccg:plan Add user login audit logging
 Execute /ccg:execute .claude/plan/my-task.md
 ```
@@ -40,7 +42,7 @@ Execute /ccg:execute .claude/plan/my-task.md
 | Plugin skills | Supported | `codex debug prompt-input` should list `ccg:*` skills after install/restart. |
 | Plugin MCP entries | Supported | `codex mcp list` should show configured plugin MCP servers when available. |
 | Marketplace command autocomplete | Not guaranteed | `/ccg:*` may not appear in the TUI slash menu. |
-| Prompt-text invocation | Supported | Type `/ccg:plan ...`, `/ccg:execute ...`, or prefix with `Execute ...` if slash input is intercepted. |
+| Prompt-text invocation | Supported | Type `/ccg:doctor`, `/ccg:plan ...`, `/ccg:execute ...`, or prefix with `Execute ...` if slash input is intercepted. |
 | Command bridge | Client-dependent | `scripts/install-codex-command-bridge.ps1` helps only clients that discover `~/.codex/commands`. |
 
 ### Smoke Test After Install
@@ -70,6 +72,7 @@ If your Codex build supports command discovery, also try:
 Then in Codex, test prompt-text routing with:
 
 ```text
+Execute /ccg:doctor
 Execute /ccg:plan Add a smoke-test-only plan
 Execute /ccg:gemini-preview Reply exactly: CCG_OK
 ```
@@ -78,6 +81,7 @@ The plugin provides these prompt invocations and matching skills:
 
 ```text
 /ccg:ccg
+/ccg:doctor
 /ccg:plan
 /ccg:execute
 /ccg:excute
@@ -120,6 +124,12 @@ powershell -ExecutionPolicy Bypass -File .\scripts\uninstall-codex-command-bridg
 ```
 
 ## Typical Usage
+
+Diagnose the local plugin install:
+
+```text
+/ccg:doctor
+```
 
 Create a Codex-native CCG plan:
 

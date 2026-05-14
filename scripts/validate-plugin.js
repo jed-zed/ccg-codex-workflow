@@ -43,6 +43,10 @@ function validateJson() {
 function validateScripts() {
   const files = [
     "scripts/doctor.ps1",
+    "plugins/ccg/scripts/doctor.ps1",
+    "plugins/ccg/commands/doctor.md",
+    "plugins/ccg/skills/ccg-doctor/SKILL.md",
+    "plugins/ccg/skills/ccg-doctor/agents/openai.yaml",
     "scripts/install-codex-command-bridge.ps1",
     "scripts/uninstall-codex-command-bridge.ps1",
   ];

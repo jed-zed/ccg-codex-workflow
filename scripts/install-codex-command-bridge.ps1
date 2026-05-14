@@ -47,6 +47,7 @@ Copy-Command "execute.md" (Join-Path $ccgNamespace "execute.md")
 Copy-Command "excute.md" (Join-Path $ccgNamespace "excute.md")
 Copy-Command "codex-exec.md" (Join-Path $ccgNamespace "codex-exec.md")
 Copy-Command "workflow.md" (Join-Path $ccgNamespace "workflow.md")
+Copy-Command "doctor.md" (Join-Path $ccgNamespace "doctor.md")
 Copy-Command "review.md" (Join-Path $ccgNamespace "review.md")
 Copy-Command "gemini-preview.md" (Join-Path $ccgNamespace "gemini-preview.md")
 Copy-Command "gen-docs.md" (Join-Path $ccgNamespace "gen-docs.md")
@@ -58,4 +59,4 @@ Copy-Command "verify-security.md" (Join-Path $ccgNamespace "verify-security.md")
 Write-Output ""
 Write-Output "CCG command bridge installed under $commandsRoot"
 Write-Output "Restart Codex TUI to reload local files."
-Write-Output "Note: Codex CLI 0.130 may not surface custom command autocomplete. If /ccg:* is not shown, type /ccg:plan or /ccg:execute as normal prompt text."
+Write-Output "Note: Codex CLI 0.130 may not surface custom command autocomplete. If /ccg:* is not shown, type /ccg:doctor, /ccg:plan, or /ccg:execute as normal prompt text."

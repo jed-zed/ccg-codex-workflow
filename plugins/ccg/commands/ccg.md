@@ -19,6 +19,7 @@ If `$ARGUMENTS` is empty, show the available CCG commands in Chinese:
 - `/ccg:ccg` - show this command index.
 - `/ccg:plan <task>` - create or revise a CCG plan with Codex and Gemini analysis.
 - `/ccg:workflow` - explain the Codex-native CCG workflow.
+- `/ccg:doctor` - diagnose local CCG plugin, skill, MCP, bridge, and Gemini availability.
 - `/ccg:execute <plan>` - execute a CCG plan with Codex as orchestrator.
 - `/ccg:codex-exec <plan>` - explicit Codex-led execution alias.
 - `/ccg:excute <plan>` - typo-compatible alias.
