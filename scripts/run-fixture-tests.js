@@ -110,10 +110,12 @@ const geminiPreview = path.join(
   "scripts",
   "invoke_gemini_preview.py"
 );
+const geminiTemplateDir = path.join(repoRoot, "plugins", "ccg", "skills", "ccg-executor", "templates", "gemini");
 const pluginDoctor = path.join(repoRoot, "plugins", "ccg", "scripts", "doctor.ps1");
 const syncLocalPluginCache = path.join(repoRoot, "scripts", "sync-local-plugin-cache.ps1");
 const pluginSyncLocalPluginCache = path.join(repoRoot, "plugins", "ccg", "scripts", "sync-local-plugin-cache.ps1");
 const ccgPlanSkill = path.join(repoRoot, "plugins", "ccg", "skills", "ccg-plan", "SKILL.md");
+const ccgExecutorSkill = path.join(repoRoot, "plugins", "ccg", "skills", "ccg-executor", "SKILL.md");
 const ccgDoctorSkill = path.join(repoRoot, "plugins", "ccg", "skills", "ccg-doctor", "SKILL.md");
 const realPluginRoot = path.join(repoRoot, "plugins", "ccg");
 
@@ -210,9 +212,88 @@ test("verify-quality scans JSX and TSX files", () => {
   const dir = tempDir("ccg-quality-fixture-");
   writeFile(path.join(dir, "Component.tsx"), "export function Component() { return <div />; }\n");
   writeFile(path.join(dir, "Widget.jsx"), "export function Widget() { return <span />; }\n");
+  writeFile(path.join(dir, "Button.tsx"), "export const Button = () => (<button>Click</button>);\n");
   const result = run(node, [qualityChecker, dir, "--json"]);
   const json = parseJsonOutput(result);
-  assert(json.files_scanned === 2, `expected 2 frontend files scanned, got ${json.files_scanned}`);
+  assert(json.files_scanned === 3, `expected 3 frontend files scanned, got ${json.files_scanned}`);
+  assert(Array.isArray(json.file_metrics), "expected file metrics in JSON output");
+  const totalFunctions = json.file_metrics.reduce((sum, metric) => sum + metric.functions, 0);
+  assert(totalFunctions === 3, `expected 3 frontend functions, got ${totalFunctions}`);
+});
+
+test("verify-quality computes JS and TS structural metrics", () => {
+  const dir = tempDir("ccg-quality-js-ts-ast-");
+  const filler = Array.from({ length: 51 }, (_, index) => `  const pad${index} = ${index};`).join("\n");
+  writeFile(
+    path.join(dir, "risky.ts"),
+    `export function riskyFlow(a: string, b: string, c: string, d: string, e: string, f: string) {
+  const fake = "if for while switch function fake() {}";
+  const templated = \`while catch case function nope() {}\`;
+  type LocalConfig = { retry?: boolean };
+  // if for while switch function hiddenInComment() {}
+  if (a) {}
+  if (b) {}
+  if (c) {}
+  if (d) {}
+  if (e) {}
+  if (f) {}
+  for (const item of [a]) {}
+  while (false) {}
+  switch (a) { case "x": break; }
+${filler}
+  return templated;
+}
+
+type Callback = (value: string) => void;
+interface Runner {
+  run(value: string): void;
+}
+`
+  );
+  writeFile(
+    path.join(dir, "Service.mts"),
+    `export class GoodService {
+  async loadItems<T>(source: T, options: { retry: boolean }) {
+    if (options.retry) {}
+    return source;
+  }
+
+  onClick = () => {
+    if (this) {}
+  };
+}
+`
+  );
+  writeFile(
+    path.join(dir, "false-positive.js"),
+    `const functions = [1, 2, 3];
+if (functions.length > 0) {
+  console.log(functions.reduce((sum, value) => sum + value, 0));
+}
+`
+  );
+
+  const result = run(node, [qualityChecker, dir, "--json"]);
+  const json = parseJsonOutput(result);
+  const riskyMetric = json.file_metrics.find((metric) => metric.path.endsWith("risky.ts"));
+  const serviceMetric = json.file_metrics.find((metric) => metric.path.endsWith("Service.mts"));
+  const falsePositiveMetric = json.file_metrics.find((metric) => metric.path.endsWith("false-positive.js"));
+  assert(riskyMetric, "expected risky.ts metrics");
+  assert(serviceMetric, "expected Service.mts metrics");
+  assert(falsePositiveMetric, "expected false-positive.js metrics");
+  assert(riskyMetric.functions === 1, `expected only riskyFlow as a function, got ${riskyMetric.functions}`);
+  assert(riskyMetric.max_complexity === 11, `expected masked complexity 11, got ${riskyMetric.max_complexity}`);
+  assert(riskyMetric.avg_function_length > 50, "expected long TypeScript function length");
+  assert(serviceMetric.classes === 1, `expected one class, got ${serviceMetric.classes}`);
+  assert(serviceMetric.functions === 2, `expected method and class field arrow, got ${serviceMetric.functions}`);
+  assert(
+    falsePositiveMetric.functions === 0,
+    `expected no functions false positive, got ${falsePositiveMetric.functions}`
+  );
+  const messages = json.issues.map((issue) => issue.message).join("\n");
+  assert(messages.includes("Function 'riskyFlow' is too long"), "expected function length warning");
+  assert(messages.includes("Function 'riskyFlow' cyclomatic complexity is high"), "expected complexity warning");
+  assert(messages.includes("Function 'riskyFlow' has too many parameters"), "expected parameter warning");
 });
 
 test("Gemini snapshot excludes sensitive files", () => {
@@ -272,6 +353,46 @@ print("CLI=" + module.parse_args().model)
   assert(result.stdout.includes("DEFAULT=gemini-3.1-pro-preview"), `expected upgraded default:\n${result.stdout}`);
   assert(result.stdout.includes("ENV=env-model"), `expected GEMINI_MODEL override:\n${result.stdout}`);
   assert(result.stdout.includes("CLI=cli-model"), `expected --model override:\n${result.stdout}`);
+});
+
+test("Gemini prompt templates are bundled and referenced", () => {
+  for (const name of ["base", "general", "plan", "prototype", "review", "frontend"]) {
+    const file = path.join(geminiTemplateDir, `${name}.md`);
+    assert(fs.existsSync(file), `expected bundled Gemini prompt template ${name}.md`);
+  }
+  const base = fs.readFileSync(path.join(geminiTemplateDir, "base.md"), "utf8");
+  assert(base.includes("Codex owns"), "expected Codex ownership in base template");
+  assert(base.includes("read-only"), "expected read-only boundary in base template");
+  assert(base.includes("original CCG"), "expected original CCG provenance in base template");
+  const prototype = fs.readFileSync(path.join(geminiTemplateDir, "prototype.md"), "utf8");
+  assert(prototype.includes("Unified Diff Patch"), "expected prototype template to request unified diff patches");
+  const executorSkill = fs.readFileSync(ccgExecutorSkill, "utf8");
+  assert(executorSkill.includes("--prompt-template"), "expected executor skill to document prompt templates");
+});
+
+test("Gemini preview helper defaults to templates and browser auto-close", () => {
+  const snippet = `
+import importlib.util, pathlib, sys
+script = pathlib.Path(sys.argv[1])
+spec = importlib.util.spec_from_file_location("gemini_preview", script)
+module = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(module)
+sys.argv = ["tool"]
+args = module.parse_args()
+print("TEMPLATE=" + args.prompt_template)
+print("AUTO_CLOSE=" + str(args.auto_close_browser_seconds))
+wrapped = module.apply_prompt_template(args, "Implement the feature")
+print("HAS_CODEX_OWNS=" + str("Codex owns" in wrapped))
+print("HAS_TASK=" + str("Implement the feature" in wrapped))
+html = module.make_handler().index_html()
+print("HAS_WINDOW_CLOSE=" + str("window.close()" in html))
+`;
+  const result = run(python, ["-c", snippet, geminiPreview]);
+  assert(result.stdout.includes("TEMPLATE=general"), `expected general template default:\n${result.stdout}`);
+  assert(result.stdout.includes("AUTO_CLOSE=3"), `expected 3s browser auto-close default:\n${result.stdout}`);
+  assert(result.stdout.includes("HAS_CODEX_OWNS=True"), `expected template wrapping:\n${result.stdout}`);
+  assert(result.stdout.includes("HAS_TASK=True"), `expected original prompt preserved:\n${result.stdout}`);
+  assert(result.stdout.includes("HAS_WINDOW_CLOSE=True"), `expected preview page to close itself:\n${result.stdout}`);
 });
 
 test("sync-local-plugin-cache WhatIf does not create cache files", () => {

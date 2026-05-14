@@ -23,6 +23,9 @@ import webbrowser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
+PROMPT_TEMPLATE_DIR = Path(__file__).resolve().parent.parent / "templates" / "gemini"
+PROMPT_TEMPLATES = ("none", "general", "plan", "prototype", "review", "frontend")
+
 
 class State:
     def __init__(self) -> None:
@@ -36,6 +39,7 @@ class State:
         self.status = "starting"
         self.done = False
         self.exit_code: int | None = None
+        self.auto_close_browser_seconds = 3
         self.started_at = time.strftime("%Y-%m-%d %H:%M:%S")
 
     def update(self, **kwargs: object) -> None:
@@ -67,6 +71,7 @@ class State:
                 "status": self.status,
                 "done": self.done,
                 "exit_code": self.exit_code,
+                "auto_close_browser_seconds": self.auto_close_browser_seconds,
                 "started_at": self.started_at,
             }
 
@@ -134,9 +139,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--output-file", default="")
     parser.add_argument("--hold-seconds", type=int, default=10)
     parser.add_argument("--no-browser", action="store_true")
+    parser.add_argument("--auto-close-browser-seconds", type=int, default=3)
+    parser.add_argument("--no-auto-close-browser", action="store_true")
     parser.add_argument("--detach", action="store_true", help="Start in the background and return PID/log paths")
     parser.add_argument("--preview-port", type=int, default=0, help=argparse.SUPPRESS)
     parser.add_argument("--approval-mode", default="plan", choices=["default", "auto_edit", "yolo", "plan"])
+    parser.add_argument("--prompt-template", default="general", choices=PROMPT_TEMPLATES)
     parser.add_argument(
         "--direct-workdir",
         action="store_true",
@@ -147,12 +155,38 @@ def parse_args() -> argparse.Namespace:
 
 def get_prompt(args: argparse.Namespace) -> str:
     if args.prompt_file:
-        return Path(args.prompt_file).read_text(encoding="utf-8")
+        return resolve_cli_file(args.prompt_file).read_text(encoding="utf-8")
     if args.prompt:
         return args.prompt
     if not sys.stdin.isatty():
         return sys.stdin.read()
     raise SystemExit("ERROR: provide --prompt, --prompt-file, or stdin")
+
+
+def read_prompt_template(name: str) -> str:
+    path = PROMPT_TEMPLATE_DIR / f"{name}.md"
+    if not path.exists():
+        raise SystemExit(f"ERROR: Gemini prompt template not found: {path}")
+    return path.read_text(encoding="utf-8")
+
+
+def apply_prompt_template(args: argparse.Namespace, prompt: str) -> str:
+    template_name = getattr(args, "prompt_template", "general")
+    if template_name == "none":
+        return prompt
+
+    base = read_prompt_template("base")
+    role = read_prompt_template(template_name)
+    return (
+        f"{base.rstrip()}\n\n"
+        f"{role.rstrip()}\n\n"
+        "# User Task\n\n"
+        f"{prompt.strip()}\n"
+    )
+
+
+def resolve_cli_file(value: str) -> Path:
+    return Path(value).expanduser().resolve()
 
 
 def free_port() -> int:
@@ -213,18 +247,19 @@ def detach(args: argparse.Namespace, prompt: str, output_path: Path) -> int:
     root = output_path.parent
     root.mkdir(parents=True, exist_ok=True)
     stamp = output_path.stem
-    prompt_file = Path(args.prompt_file) if args.prompt_file else root / f"{stamp}.prompt.txt"
+    prompt_file = resolve_cli_file(args.prompt_file) if args.prompt_file else root / f"{stamp}.prompt.txt"
     if not args.prompt_file:
         prompt_file.write_text(prompt, encoding="utf-8", errors="replace")
 
     launcher_log = output_path.with_suffix(".launcher.log")
     preview_port = args.preview_port or free_port()
     preview_url = f"http://127.0.0.1:{preview_port}/"
+    workdir_path = resolve_cli_file(args.workdir)
     child_args = [
         sys.executable,
         str(Path(__file__).resolve()),
         "--workdir",
-        str(Path(args.workdir).resolve()),
+        str(workdir_path),
         "--model",
         args.model,
         "--prompt-file",
@@ -235,12 +270,18 @@ def detach(args: argparse.Namespace, prompt: str, output_path: Path) -> int:
         str(args.hold_seconds),
         "--approval-mode",
         args.approval_mode,
+        "--prompt-template",
+        args.prompt_template,
+        "--auto-close-browser-seconds",
+        str(args.auto_close_browser_seconds),
         "--preview-port",
         str(preview_port),
         "--no-browser",
     ]
     if args.direct_workdir:
         child_args.append("--direct-workdir")
+    if args.no_auto_close_browser:
+        child_args.append("--no-auto-close-browser")
 
     creationflags = 0
     if os.name == "nt" and hasattr(subprocess, "CREATE_NO_WINDOW"):
@@ -249,7 +290,7 @@ def detach(args: argparse.Namespace, prompt: str, output_path: Path) -> int:
     log_handle = launcher_log.open("w", encoding="utf-8", errors="replace")
     proc = subprocess.Popen(
         child_args,
-        cwd=str(Path(args.workdir).resolve()),
+        cwd=str(workdir_path),
         stdout=log_handle,
         stderr=subprocess.STDOUT,
         stdin=subprocess.DEVNULL,
@@ -263,6 +304,9 @@ def detach(args: argparse.Namespace, prompt: str, output_path: Path) -> int:
     print(f"CCG_GEMINI_OUTPUT_FILE={output_path}", flush=True)
     print(f"CCG_GEMINI_RESPONSE_FILE={output_path.with_suffix('.response.txt')}", flush=True)
     print(f"CCG_GEMINI_LAUNCHER_LOG={launcher_log}", flush=True)
+    print(f"CCG_GEMINI_PROMPT_TEMPLATE={args.prompt_template}", flush=True)
+    auto_close = 0 if args.no_auto_close_browser else max(0, args.auto_close_browser_seconds)
+    print(f"CCG_GEMINI_AUTO_CLOSE_BROWSER_SECONDS={auto_close}", flush=True)
     if not args.no_browser:
         ready = wait_for_port(preview_port)
         opened = open_preview_url(preview_url) if ready else False
@@ -304,6 +348,7 @@ def make_handler() -> type[BaseHTTPRequestHandler]:
             snap = STATE.snapshot()
             model = html.escape(str(snap["model"]))
             prompt = html.escape(str(snap["prompt_preview"]))
+            auto_close = int(snap.get("auto_close_browser_seconds", 0) or 0)
             return f"""<!doctype html>
 <html lang="en">
 <head>
@@ -392,7 +437,18 @@ def make_handler() -> type[BaseHTTPRequestHandler]:
         if (state.done) {{
           const ok = state.exit_code === 0;
           doneEl.className = ok ? 'done' : 'done failed';
-          doneEl.textContent = ok ? 'Completed. You can close this page.' : 'Finished with exit code ' + state.exit_code;
+          const autoClose = Number(state.auto_close_browser_seconds || {auto_close});
+          doneEl.textContent = ok
+            ? (autoClose > 0 ? 'Completed. Closing preview...' : 'Completed. You can close this page.')
+            : 'Finished with exit code ' + state.exit_code;
+          if (autoClose > 0) {{
+            setTimeout(() => {{
+              window.close();
+              setTimeout(() => {{
+                doneEl.textContent = ok ? 'Completed. You can close this page.' : doneEl.textContent;
+              }}, 700);
+            }}, autoClose * 1000);
+          }}
           return;
         }}
       }} catch (e) {{}}
@@ -449,7 +505,7 @@ def resolve_gemini_invocation() -> list[str]:
     raise SystemExit("ERROR: gemini CLI not found in PATH")
 
 
-def stream_reader(pipe, output_file, is_stderr: bool = False) -> None:
+def stream_output(pipe, output_file, is_stderr: bool = False) -> None:
     for line in pipe:
         if not line:
             continue
@@ -504,7 +560,7 @@ def snapshot_ignore(_directory: str, names: list[str]) -> set[str]:
 
 
 def prepare_gemini_workdir(args: argparse.Namespace) -> tuple[Path, tempfile.TemporaryDirectory[str] | None]:
-    source = Path(args.workdir).resolve()
+    source = resolve_cli_file(args.workdir)
     if args.direct_workdir:
         return source, None
 
@@ -522,12 +578,13 @@ def build_prompt_for_gemini(args: argparse.Namespace, prompt: str, gemini_workdi
     if args.direct_workdir:
         return prompt
 
-    original = Path(args.workdir).resolve()
+    original = resolve_cli_file(args.workdir)
     return (
         "You are running inside a disposable read-only-style snapshot of the user's workspace.\n"
         f"Snapshot path: {gemini_workdir}\n"
         f"Original workspace path, for reference only: {original}\n"
-        "Do not attempt to modify files. Provide analysis, review findings, test ideas, or unified diffs in your response.\n"
+        "Do not attempt to modify files. Provide analysis, review findings, "
+        "test ideas, or unified diffs in your response.\n"
         "Codex will inspect your output and apply any final changes itself.\n\n"
         f"{prompt}"
     )
@@ -558,8 +615,16 @@ def run_gemini(args: argparse.Namespace, prompt: str, output_path: Path, gemini_
         assert proc.stdout is not None
         assert proc.stderr is not None
 
-        stdout_thread = threading.Thread(target=stream_reader, args=(proc.stdout, out, False), daemon=True)
-        stderr_thread = threading.Thread(target=stream_reader, args=(proc.stderr, out, True), daemon=True)
+        stdout_thread = threading.Thread(
+            target=stream_output,
+            args=(proc.stdout, out, False),
+            daemon=True,
+        )
+        stderr_thread = threading.Thread(
+            target=stream_output,
+            args=(proc.stderr, out, True),
+            daemon=True,
+        )
         stdout_thread.start()
         stderr_thread.start()
 
@@ -573,16 +638,22 @@ def run_gemini(args: argparse.Namespace, prompt: str, output_path: Path, gemini_
 
 def main() -> int:
     args = parse_args()
-    prompt = get_prompt(args)
-    prompt_preview = prompt[:1200] + ("..." if len(prompt) > 1200 else "")
+    raw_prompt = get_prompt(args)
+    prompt_preview = raw_prompt[:1200] + ("..." if len(raw_prompt) > 1200 else "")
     STATE.update(model=args.model, prompt_preview=prompt_preview)
+    auto_close = 0 if args.no_auto_close_browser else max(0, args.auto_close_browser_seconds)
+    STATE.update(auto_close_browser_seconds=auto_close)
 
-    output_path = Path(args.output_file) if args.output_file else default_output_file()
+    output_path = resolve_cli_file(args.output_file) if args.output_file else default_output_file()
     output_path.parent.mkdir(parents=True, exist_ok=True)
     if args.detach:
-        return detach(args, prompt, output_path)
+        return detach(args, raw_prompt, output_path)
+
+    prompt = apply_prompt_template(args, raw_prompt)
 
     print(f"CCG_GEMINI_OUTPUT_FILE={output_path}", flush=True)
+    print(f"CCG_GEMINI_PROMPT_TEMPLATE={args.prompt_template}", flush=True)
+    print(f"CCG_GEMINI_AUTO_CLOSE_BROWSER_SECONDS={auto_close}", flush=True)
 
     server, _ = start_server(open_browser=not args.no_browser, port=args.preview_port)
     temp_dir: tempfile.TemporaryDirectory[str] | None = None

@@ -246,6 +246,8 @@ python .\plugins\ccg\skills\ccg-executor\scripts\invoke_gemini_preview.py --work
 
 The default Gemini model is `gemini-3.1-pro-preview`. You can override it with `GEMINI_MODEL` or `--model`.
 
+Gemini helper prompts use bundled CCG templates by default. Use `--prompt-template general|plan|prototype|review|frontend`; use `none` only for debugging the wrapper. These templates are adapted from the original CCG role prompts, but rewritten so Codex owns orchestration, file edits, verification, and final delivery while Gemini remains a read-only helper. Browser preview tabs attempt to close themselves after completion, defaulting to 3 seconds; pass `--no-auto-close-browser` to keep the preview open.
+
 Use `--direct-workdir` only when you explicitly want Gemini to run against the real workspace.
 
 ## Development Checks
@@ -256,4 +258,4 @@ python -m py_compile .\plugins\ccg\skills\ccg-executor\scripts\invoke_gemini_pre
 node .\scripts\run-fixture-tests.js
 ```
 
-`verify-quality` scans frontend file extensions including `.jsx` and `.tsx`, but JavaScript and TypeScript still use a lightweight generic scan. Use the project's own lint/typecheck for deep JS/TS complexity and type-aware checks.
+`verify-quality` scans JavaScript and TypeScript-family files, including `.jsx` and `.tsx`, with a dependency-free structural AST-lite pass for functions, classes, methods, parameters, length, and branching complexity. It is not a full Babel/TypeScript parser and is not type-aware, so keep using the target project's own lint/typecheck for deep language checks.

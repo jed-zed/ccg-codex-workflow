@@ -47,8 +47,9 @@ This gate does not apply to empty-input usage/help responses.
 
 4. **Run Gemini read-only analysis**
    - Use the bundled helper from `../ccg-executor/scripts/invoke_gemini_preview.py`.
-   - Invoke Gemini with `--approval-mode plan --detach`, default model `gemini-3.1-pro-preview`, no `--direct-workdir`, and no `--no-browser` unless the user explicitly asks for headless mode.
+   - Invoke Gemini with `--approval-mode plan --detach --prompt-template plan`, default model `gemini-3.1-pro-preview`, no `--direct-workdir`, and no `--no-browser` unless the user explicitly asks for headless mode.
    - Confirm the helper prints `CCG_GEMINI_BROWSER_OPENED=1` or report the printed `CCG_GEMINI_PREVIEW_URL` so the user can open it manually.
+   - Record `CCG_GEMINI_PROMPT_TEMPLATE=plan` and `CCG_GEMINI_AUTO_CLOSE_BROWSER_SECONDS`; the preview should close itself after completion unless the user explicitly disables auto-close.
    - Treat `CCG_GEMINI_SNAPSHOT_EXCLUDES` as a security boundary. If excluded secret/config files are relevant, ask the user for sanitized details instead of weakening the snapshot exclusions.
    - Include the enhanced requirement, context evidence, and a request for concise analysis: alternative approaches, edge cases, UI/UX concerns when relevant, tests, risks, and recommended plan steps.
    - Retry failed Gemini calls up to 2 times. If all attempts fail, stop and report the failure; do not generate a fake multi-model plan.

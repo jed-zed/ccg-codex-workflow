@@ -61,22 +61,32 @@ Use Gemini as a helper, not as the executor of record.
 Recommended safe Gemini invocation:
 
 ```powershell
-python "<path-to-this-skill>\scripts\invoke_gemini_preview.py" --workdir "<repo-abs-path>" --model gemini-3.1-pro-preview --prompt-file "<prompt-file>"
+python "<path-to-this-skill>\scripts\invoke_gemini_preview.py" --workdir "<repo-abs-path>" --model gemini-3.1-pro-preview --prompt-template review --prompt-file "<prompt-file>"
 ```
 
 Resolve `<path-to-this-skill>` from this `SKILL.md` directory. This helper creates a disposable snapshot of the workspace by default, starts a localhost browser preview, streams Gemini `stream-json` output into the page, and writes the raw output under `~/.codex/ccg/logs/`. It mirrors the original CCG `codeagent-wrapper` Web UI behavior without calling the Claude-side wrapper.
 
+Gemini prompts must use the bundled standard templates in `templates/gemini/`. They are adapted from the original CCG role prompts and command templates, but rewritten for Codex-native orchestration:
+
+| Template | Use |
+| --- | --- |
+| `general` | Default bounded analysis, edge cases, and test ideas |
+| `plan` | `/ccg:plan` read-only planning analysis |
+| `prototype` | Draft implementation as a Unified Diff Patch |
+| `review` | Bounded second-pass code review |
+| `frontend` | UI, UX, accessibility, responsive, and component review |
+
+Use `--prompt-template <name>` for every Gemini helper call. Use `--prompt-template none` only for debugging the helper itself.
+
 The disposable snapshot excludes common secret files and credential directories such as `.env`, `.env.*`, `*.pem`, `*.key`, `*.p12`, `*.pfx`, `id_rsa`, `id_ed25519`, `.aws`, `.gcp`, and `.azure`. The helper prints `CCG_GEMINI_SNAPSHOT_PATH` and `CCG_GEMINI_SNAPSHOT_EXCLUDES`; if a task truly needs one of those files, ask the user for a sanitized excerpt instead of copying secrets into Gemini context.
 
-Use `--no-browser` only for quick smoke tests or when the user explicitly wants headless execution. For long-running background delegation, add `--detach`; the parent process now reserves the preview port, waits for the preview server, opens the browser itself, and prints `CCG_GEMINI_PREVIEW_URL`, `CCG_GEMINI_BROWSER_OPENED`, `CCG_GEMINI_PREVIEW_PID`, `CCG_GEMINI_OUTPUT_FILE`, `CCG_GEMINI_RESPONSE_FILE`, and `CCG_GEMINI_LAUNCHER_LOG`. Later read the response file before acting on Gemini's suggestions. Use `--direct-workdir` only when the user explicitly accepts that Gemini may touch the real workspace.
+Use `--no-browser` only for quick smoke tests or when the user explicitly wants headless execution. For long-running background delegation, add `--detach`; the parent process now reserves the preview port, waits for the preview server, opens the browser itself, and prints `CCG_GEMINI_PREVIEW_URL`, `CCG_GEMINI_BROWSER_OPENED`, `CCG_GEMINI_PREVIEW_PID`, `CCG_GEMINI_OUTPUT_FILE`, `CCG_GEMINI_RESPONSE_FILE`, `CCG_GEMINI_LAUNCHER_LOG`, `CCG_GEMINI_PROMPT_TEMPLATE`, and `CCG_GEMINI_AUTO_CLOSE_BROWSER_SECONDS`. The browser preview attempts to close itself after completion, defaulting to 3 seconds; use `--no-auto-close-browser` only when the user wants to keep the preview open. Later read the response file before acting on Gemini's suggestions. Use `--direct-workdir` only when the user explicitly accepts that Gemini may touch the real workspace.
 
-Gemini prompts should include:
+Gemini task prompts should include only the task-specific payload because the helper prepends the standard CCG template:
 
 - task goal and relevant plan excerpt;
 - exact files or snippets to inspect when available;
 - a request for concise output: analysis, unified diff, test cases, or review findings;
-- the constraint that Gemini must not require direct workspace writes.
-- the constraint that Codex will verify and apply any final changes.
 
 ## Execution Workflow
 

@@ -11,9 +11,9 @@ Use the Gemini preview helper bundled with this plugin:
 Default command:
 
 ```powershell
-python "<plugin-skill-root>\ccg-executor\scripts\invoke_gemini_preview.py" --workdir "<repo-abs-path>" --model gemini-3.1-pro-preview --prompt "<focused prompt>"
+python "<plugin-skill-root>\ccg-executor\scripts\invoke_gemini_preview.py" --workdir "<repo-abs-path>" --model gemini-3.1-pro-preview --prompt-template general --prompt "<focused prompt>"
 ```
 
-The helper defaults to `gemini-3.1-pro-preview` when `--model` is omitted, while `GEMINI_MODEL` and `--model` can still override it. It runs Gemini in a disposable workspace snapshot by default. Keep Gemini in read-only plan mode. Codex must inspect the output, adapt it to local code patterns, and apply any final edits itself. Use `--direct-workdir` only when the user explicitly accepts direct workspace access.
+The helper defaults to `gemini-3.1-pro-preview` when `--model` is omitted, while `GEMINI_MODEL` and `--model` can still override it. It also defaults to `--prompt-template general`, with additional templates `plan`, `prototype`, `review`, and `frontend` bundled under `ccg-executor/templates/gemini/`. These templates preserve the original CCG model boundary: Gemini is read-only and Codex owns final application and verification. It runs Gemini in a disposable workspace snapshot by default. Use `--direct-workdir` only when the user explicitly accepts direct workspace access.
 
-For background mode, add `--detach`. The helper should still open the browser automatically and print `CCG_GEMINI_PREVIEW_URL`, `CCG_GEMINI_BROWSER_OPENED`, and `CCG_GEMINI_RESPONSE_FILE`; later read the response file before using Gemini's output.
+For background mode, add `--detach`. The helper should still open the browser automatically and print `CCG_GEMINI_PREVIEW_URL`, `CCG_GEMINI_BROWSER_OPENED`, `CCG_GEMINI_RESPONSE_FILE`, `CCG_GEMINI_PROMPT_TEMPLATE`, and `CCG_GEMINI_AUTO_CLOSE_BROWSER_SECONDS`; later read the response file before using Gemini's output. The preview page closes itself after completion by default. Use `--no-auto-close-browser` only when the user explicitly wants the preview tab kept open.

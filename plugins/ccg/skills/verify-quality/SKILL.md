@@ -5,7 +5,7 @@ license: MIT
 allowed-tools: Bash, Read, Glob
 ---
 
-Note: JavaScript and TypeScript files, including `.jsx` and `.tsx`, are scanned with the lightweight generic checker. Use the target project's own lint/typecheck for deep AST-aware JS/TS complexity and type checks.
+Note: JavaScript and TypeScript files, including `.jsx` and `.tsx`, now use a dependency-free structural AST-lite scan for functions, classes, methods, parameters, length, and branching complexity. It is not a full Babel/TypeScript parser and is not type-aware, so keep using the target project's own lint/typecheck for deep language checks.
 
 # ⚖ 校验关卡 · 代码质量
 

@@ -98,6 +98,28 @@ function validateGeminiDefaults() {
   console.log("gemini defaults ok");
 }
 
+function validateGeminiTemplates() {
+  const templateDir = path.join(repoRoot, "plugins/ccg/skills/ccg-executor/templates/gemini");
+  for (const name of ["base", "general", "plan", "prototype", "review", "frontend"]) {
+    const file = path.join(templateDir, `${name}.md`);
+    if (!fs.existsSync(file)) fail(`missing Gemini prompt template: ${name}.md`);
+  }
+
+  const helper = fs.readFileSync(
+    path.join(repoRoot, "plugins/ccg/skills/ccg-executor/scripts/invoke_gemini_preview.py"),
+    "utf8"
+  );
+  for (const phrase of ["--prompt-template", "apply_prompt_template", "window.close()", "--no-auto-close-browser"]) {
+    if (!helper.includes(phrase)) fail(`Gemini preview helper missing template/auto-close phrase: ${phrase}`);
+  }
+
+  const executorSkill = fs.readFileSync(path.join(repoRoot, "plugins/ccg/skills/ccg-executor/SKILL.md"), "utf8");
+  if (!executorSkill.includes("--prompt-template")) {
+    fail("ccg-executor skill must document Gemini prompt templates");
+  }
+  console.log("gemini templates ok");
+}
+
 function validateDoctorFixDocs() {
   const doctorSkill = fs.readFileSync(path.join(repoRoot, "plugins/ccg/skills/ccg-doctor/SKILL.md"), "utf8");
   for (const phrase of ["--fix", "source checkout", "read-only", "sync-local-plugin-cache.ps1"]) {
@@ -159,6 +181,7 @@ function main() {
   validateJson();
   validateScripts();
   validateGeminiDefaults();
+  validateGeminiTemplates();
   validateDoctorFixDocs();
   validateCiActions();
   validateSkills();
