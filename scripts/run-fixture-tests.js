@@ -879,6 +879,57 @@ finally:
   assert(result.stdout.includes("RESPONSE_SAVED=True"), `expected status update:\n${result.stdout}`);
 });
 
+test("fixture:gptpro-bridge rejects empty manual response", () => {
+  const dir = tempDir("ccg-gptpro-empty-response-");
+  const snippet = `
+import importlib.util, json, pathlib, sys, urllib.error, urllib.request
+script = pathlib.Path(sys.argv[1])
+root = pathlib.Path(sys.argv[2])
+spec = importlib.util.spec_from_file_location("gptpro_bridge", script)
+module = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(module)
+session = module.create_session(
+    mode="review",
+    workdir=root,
+    prompt="Review this diff.",
+    slug="empty-response",
+    output_root=root / ".codex" / "ccg" / "gptpro",
+    round_number=1,
+    followup_session=None,
+    followup_reason=None,
+)
+server, url = module.start_server(session, open_browser=False)
+try:
+    data = json.dumps({"response": "   \\n\\t  "}).encode("utf-8")
+    req = urllib.request.Request(
+        url + "save-response",
+        data=data,
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    try:
+        urllib.request.urlopen(req, timeout=5)
+        print("EMPTY_STATUS=unexpected-success")
+    except urllib.error.HTTPError as error:
+        print("EMPTY_STATUS=" + str(error.code))
+        print("EMPTY_BODY=" + error.read().decode("utf-8"))
+    status = json.loads(session.status_file.read_text(encoding="utf-8"))
+    print("RESPONSE_TEXT=" + repr(session.response_file.read_text(encoding="utf-8")))
+    print("RESPONSE_SAVED=" + str(status["rounds"]["round-1"]["response_saved"]))
+finally:
+    server.shutdown()
+    server.server_close()
+`;
+  const result = run(python, ["-c", snippet, gptproBridge, dir]);
+  assert(result.stdout.includes("EMPTY_STATUS=400"), `expected empty response rejection:\n${result.stdout}`);
+  assert(
+    result.stdout.includes("Manual GPT Pro response cannot be empty."),
+    `expected empty response error:\n${result.stdout}`
+  );
+  assert(result.stdout.includes("RESPONSE_TEXT=''"), `expected response file to remain empty:\n${result.stdout}`);
+  assert(result.stdout.includes("RESPONSE_SAVED=False"), `expected response_saved to remain false:\n${result.stdout}`);
+});
+
 test("fixture:gptpro-bridge followup creates round-2 only and rejects round > 2", () => {
   const dir = tempDir("ccg-gptpro-followup-");
   const outputRoot = path.join(dir, ".codex", "ccg", "gptpro");
@@ -947,6 +998,38 @@ test("fixture:gptpro-bridge followup creates round-2 only and rejects round > 2"
   );
   assert(rejected.status !== 0, "expected round > 2 to be rejected");
   assert((rejected.stderr + rejected.stdout).includes("Maximum manual questions: 2"), "expected budget error");
+});
+
+test("fixture:gptpro-bridge rejects round-2 without followup session", () => {
+  const dir = tempDir("ccg-gptpro-round2-no-followup-");
+  const outputRoot = path.join(dir, ".codex", "ccg", "gptpro");
+  const result = run(
+    python,
+    [
+      gptproBridge,
+      "--mode",
+      "plan",
+      "--workdir",
+      dir,
+      "--prompt",
+      "Second round without first round.",
+      "--slug",
+      "bad-round-two",
+      "--output-root",
+      outputRoot,
+      "--round",
+      "2",
+      "--hold-seconds",
+      "0",
+    ],
+    { allowFailure: true }
+  );
+  assert(result.status !== 0, "expected round 2 without followup session to fail");
+  assert(
+    (result.stderr + result.stdout).includes("Round 2 requires --followup-session"),
+    `expected round 2 followup error:\n${result.stdout}\n${result.stderr}`
+  );
+  assert(!fs.existsSync(outputRoot), "did not expect a new session root for invalid round 2");
 });
 
 test("fixture:gptpro commands, skills, templates, doctor, and bridge coverage exist", () => {

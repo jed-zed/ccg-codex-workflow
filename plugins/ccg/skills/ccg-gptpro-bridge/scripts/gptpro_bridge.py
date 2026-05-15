@@ -159,6 +159,8 @@ def create_session(
         raise ValueError("Maximum manual questions: 2. Decompose the task or return to Codex-native CCG workflows.")
     if round_number < 1:
         raise ValueError("Round must be 1 or 2.")
+    if round_number == 2 and not followup_session:
+        raise ValueError("Round 2 requires --followup-session. Create round 1 first.")
 
     workdir_path = Path(workdir).resolve()
     output_root_path = resolve_output_root(workdir_path, Path(output_root)).resolve()
@@ -225,6 +227,8 @@ def create_session(
 
 
 def save_response(session: BridgeSession, response_text: str) -> None:
+    if not response_text.strip():
+        raise ValueError("Manual GPT Pro response cannot be empty.")
     session.response_file.write_text(response_text, encoding="utf-8")
     status = session.status()
     status["rounds"][session.round_name]["response_saved"] = True
@@ -396,7 +400,11 @@ def start_server(session: BridgeSession, open_browser: bool = False) -> tuple[Th
                 except json.JSONDecodeError:
                     self.send_json({"ok": False, "error": "Invalid JSON"}, status=400)
                     return
-                save_response(session, str(payload.get("response", "")))
+                try:
+                    save_response(session, str(payload.get("response", "")))
+                except ValueError as error:
+                    self.send_json({"ok": False, "error": str(error)}, status=400)
+                    return
                 self.send_json({"ok": True, "response_file": str(session.response_file)})
                 return
             self.send_error(404)
