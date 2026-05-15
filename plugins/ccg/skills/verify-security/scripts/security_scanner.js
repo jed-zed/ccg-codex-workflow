@@ -272,9 +272,20 @@ function walkDir(dir, excludeDirs) {
 function scanDirectory(scanPath, excludeDirs) {
   const resolved = path.resolve(scanPath);
   const findings = [];
-  const files = walkDir(resolved, excludeDirs);
+  let files = [];
+  let stat;
+  try {
+    stat = fs.statSync(resolved);
+  } catch {
+    return { scan_path: resolved, files_scanned: 0, passed: true, findings };
+  }
+  if (stat.isFile()) {
+    files = [resolved];
+  } else {
+    files = walkDir(resolved, excludeDirs);
+  }
   for (const f of files) {
-    const relativePath = path.relative(resolved, f);
+    const relativePath = stat.isFile() ? path.basename(f) : path.relative(resolved, f);
     findings.push(...scanFile(f, SECURITY_RULES, relativePath));
   }
   findings.sort((a, b) =>

@@ -14,4 +14,4 @@ The user invoked:
 
 Use the installed CCG plugin skill `ccg:spec-impl`.
 
-Read `.codex/ccg/specs/<name>/plan.md`, execute through Codex, and archive results under `.codex/ccg/specs/<name>/archive.md`.
+Validate the spec artifacts, read `.codex/ccg/specs/<name>/plan.md`, execute through Codex, and archive results under `.codex/ccg/specs/<name>/archive.md`.

@@ -69,6 +69,17 @@ The helper creates a disposable snapshot by default, opens a browser preview, wr
 | Wrapper Web UI | Gemini preview helper opens a localhost browser page with process status, parsed output, raw stream logs, and auto-close on completion. |
 | `SESSION_ID` resume | Not supported; Codex re-searches context and launches fresh Gemini helper calls when useful. |
 
+## Codex-Native Behavioral Helpers
+
+The current plugin also adds safer Codex-native behavioral helpers on top of command-surface parity:
+
+- `spec_manager.js` manages spec artifact lifecycle, validation, archive, and `status.json`.
+- `team_plan_checker.js` parses worker ownership tables, checks same-file conflicts, and writes team `status.json`.
+- `rollback_helper.js` can execute confirmed non-destructive revert/restore flows while leaving destructive history rewrites manual-only.
+- `commit_helper.js` can collect CCG gate status before committing.
+
+These are safer Codex-native behavioral helpers, not a restoration of Claude runtime internals. Claude wrapper, Claude Agent Teams runtime, and legacy `SESSION_ID` resume are still intentionally not restored.
+
 ## Practical Migration Checklist
 
 1. Install or sync the Codex plugin.

@@ -1,6 +1,6 @@
 ---
-description: "Plan a safe CCG rollback"
-argument-hint: "--last|<commit>|--file <path>|--dry-run"
+description: "Plan or execute a safe non-destructive CCG rollback"
+argument-hint: "--last|--target <commit>|--file <path>|--mode revert|restore|reset"
 allowed-tools: [Read, Glob, Grep, Bash, Edit, Write, WebFetch]
 ---
 
@@ -14,4 +14,4 @@ The user invoked:
 
 Use the installed CCG plugin skill `ccg:rollback`.
 
-Default behavior is dry-run. Destructive reset, clean, and force-push operations require explicit user confirmation and must not be inferred.
+Default behavior is dry-run. Non-destructive revert/restore can execute only after explicit confirmation; destructive reset, clean, and force-push operations remain manual-only or blocked.

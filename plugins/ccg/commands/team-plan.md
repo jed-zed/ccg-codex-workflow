@@ -14,4 +14,4 @@ The user invoked:
 
 Use the installed CCG plugin skill `ccg:team-plan`.
 
-Produce `.codex/ccg/team/<task>/plan.md` with workers, file ownership, merge strategy, verification, and conflict risks.
+Produce `.codex/ccg/team/<task>/plan.md` with workers, file ownership, merge strategy, verification, and conflict risks, then verify it with `team_plan_checker.js`.

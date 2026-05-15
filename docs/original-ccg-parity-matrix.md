@@ -30,8 +30,8 @@ The original project is Claude-led: Claude Code orchestrates Codex and Gemini. T
 | `/ccg:enhance` | yes | done | phase-one | Enhancement workflow | Scoped Codex enhancement |
 | `/ccg:init` | yes | done | git-context | Project setup | Initialize `.codex/ccg/**` without overwriting user rules |
 | `/ccg:context` | yes | done | git-context | Context history | Manage `.codex/ccg/context/**` |
-| `/ccg:commit` | yes | done | git-context | Git commit helper | Dry-run commit message and gate helper |
-| `/ccg:rollback` | yes | done | git-context | Git rollback helper | Safe revert/restore planning |
+| `/ccg:commit` | yes | done | git-context | Git commit helper | Dry-run commit message plus optional gate runner |
+| `/ccg:rollback` | yes | done | git-context | Git rollback helper | Safe revert/restore planning plus confirmed non-destructive execution |
 | `/ccg:clean-branches` | yes | done | git-context | Branch cleanup | Dry-run merged branch cleanup with protected branches |
 | `/ccg:worktree` | yes | done | git-context | Worktree helper | Safe list/add/remove helper |
 | `/ccg:spec-init` | yes | done | spec | OPSX/spec init | Initialize `.codex/ccg/specs/**` |
@@ -84,6 +84,15 @@ The original project is Claude-led: Claude Code orchestrates Codex and Gemini. T
 | Claude `codeagent-wrapper` | not-copied | `invoke_gemini_preview.py` | Replaced by bounded Gemini preview helper; no Claude quota or session resume. |
 | Claude `SESSION_ID` resume | not-copied | Fresh Codex context search | Legacy session IDs are provenance only. |
 
+## Behavioral Depth Coverage
+
+| Area | Script | Status |
+| --- | --- | --- |
+| Spec lifecycle | `spec_manager.js` | done |
+| Team plan conflict check | `team_plan_checker.js` | done |
+| Rollback non-destructive execution | `rollback_helper.js` | done |
+| Commit gate runner | `commit_helper.js` | done |
+
 ## Expert Prompt Template Matrix
 
 | Original role | Status | Codex-native Gemini template |
@@ -107,7 +116,7 @@ The original project is Claude-led: Claude Code orchestrates Codex and Gemini. T
 ## Acceptance Notes
 
 - A command is not considered parity-complete until it has a command file, skill, `agents/openai.yaml`, command index entry, bridge coverage, README mention, doctor diagnostic coverage, and fixture/validation coverage.
-- This matrix claims full original CCG command-surface parity. Behavioral parity is implemented as safer Codex-native artifact workflows rather than behavior-for-behavior copies of Claude, OPSX, or Agent Teams runtime behavior; spec, team, and rollback depth can still be strengthened in follow-up work.
+- This matrix claims full original CCG command-surface parity. Core behavior-depth parity is implemented through safer Codex-native artifact workflows rather than behavior-for-behavior copies of Claude, OPSX, or Agent Teams runtime behavior.
 - Slash autocomplete is verified in Codex Desktop after plugin cache sync and session restart. Codex CLI 0.130/TUI still requires prompt-text invocation as the supported fallback when autocomplete is absent.
 - Gemini helper calls must open the browser preview automatically unless the user explicitly asks for headless execution.
 - Full parity release language still requires local validation and a real green GitHub Actions run on Ubuntu and Windows.

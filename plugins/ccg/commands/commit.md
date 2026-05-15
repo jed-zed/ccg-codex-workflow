@@ -1,6 +1,6 @@
 ---
-description: "Prepare a safe CCG commit"
-argument-hint: "[--execute|--confirm]"
+description: "Prepare a safe CCG commit with optional gate collection"
+argument-hint: "[--check-gates] [--execute|--confirm]"
 allowed-tools: [Read, Glob, Grep, Bash, Edit, Write, WebFetch]
 ---
 
@@ -14,4 +14,4 @@ The user invoked:
 
 Use the installed CCG plugin skill `ccg:commit`.
 
-Default behavior is dry-run: inspect status, recommend gates, and show a commit message. Commit only when the user explicitly asks for direct execution.
+Default behavior is dry-run: inspect status, optionally collect gate results, and show a commit message. Commit only when the user explicitly asks for direct execution.

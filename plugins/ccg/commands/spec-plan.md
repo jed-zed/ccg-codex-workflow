@@ -14,4 +14,4 @@ The user invoked:
 
 Use the installed CCG plugin skill `ccg:spec-plan`.
 
-Create Chinese spec-backed plans under `.codex/ccg/specs/<name>/plan.md` and, when needed, `.codex/ccg/plans/<name>.md`.
+Create Chinese spec-backed plans under `.codex/ccg/specs/<name>/plan.md` and, when needed, `.codex/ccg/plans/<name>.md`. Refuse to continue when `constraints.md` is missing or invalid.

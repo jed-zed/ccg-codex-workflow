@@ -14,4 +14,4 @@ The user invoked:
 
 Use the installed CCG plugin skill `ccg:spec-review`.
 
-Check implementation against constraints, acceptance criteria, tests, scope, and security-sensitive deltas.
+Validate the spec artifacts first, then check implementation against constraints, acceptance criteria, tests, scope, and security-sensitive deltas.

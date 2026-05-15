@@ -134,6 +134,37 @@ function parseJsonOutput(result) {
   }
 }
 
+function createFakeGateScript(filePath, payload, exitCode = 0) {
+  writeFile(
+    filePath,
+    [
+      "#!/usr/bin/env node",
+      "\"use strict\";",
+      "const fs = require(\"fs\");",
+      "if (process.env.CCG_GATE_LOG) {",
+      "  fs.appendFileSync(process.env.CCG_GATE_LOG, JSON.stringify({",
+      `    script: ${JSON.stringify(path.basename(filePath))},`,
+      "    argv: process.argv.slice(2),",
+      "    cwd: process.cwd()",
+      "  }) + \"\\n\");",
+      "}",
+      `console.log(JSON.stringify(${JSON.stringify(payload)}, null, 2));`,
+      `process.exit(${exitCode});`,
+      "",
+    ].join("\n")
+  );
+  return filePath;
+}
+
+function readJsonLines(filePath) {
+  if (!fs.existsSync(filePath)) return [];
+  return fs
+    .readFileSync(filePath, "utf8")
+    .split(/\r?\n/)
+    .filter(Boolean)
+    .map((line) => JSON.parse(line));
+}
+
 const changeAnalyzer = path.join(
   repoRoot,
   "plugins",
@@ -215,6 +246,8 @@ const fullParityCommands = [
 const contextManager = path.join(repoRoot, "plugins", "ccg", "skills", "ccg-context", "scripts", "context_manager.js");
 const commitHelper = path.join(repoRoot, "plugins", "ccg", "skills", "ccg-commit", "scripts", "commit_helper.js");
 const rollbackHelper = path.join(repoRoot, "plugins", "ccg", "skills", "ccg-rollback", "scripts", "rollback_helper.js");
+const specManager = path.join(repoRoot, "plugins", "ccg", "skills", "ccg-spec-init", "scripts", "spec_manager.js");
+const teamPlanChecker = path.join(repoRoot, "plugins", "ccg", "skills", "ccg-team", "scripts", "team_plan_checker.js");
 const cleanBranchesHelper = path.join(repoRoot, "plugins", "ccg", "skills", "ccg-clean-branches", "scripts", "clean_branches.js");
 const worktreeHelper = path.join(repoRoot, "plugins", "ccg", "skills", "ccg-worktree", "scripts", "worktree_helper.js");
 const extendedGeminiTemplates = [
@@ -1250,6 +1283,489 @@ test("fixture:git-context git helpers default to safe dry-run behavior", () => {
   const worktree = run(node, [worktreeHelper, "list", "--json"], { cwd: dir });
   const worktreeJson = parseJsonOutput(worktree);
   assert(worktreeJson.command === "list", "expected worktree list command");
+});
+
+test("fixture:spec-manager init creates .codex/ccg/specs/README.md", () => {
+  const dir = tempDir("ccg-spec-manager-init-");
+  run(node, [specManager, "init"], { cwd: dir });
+  assert(
+    fs.existsSync(path.join(dir, ".codex", "ccg", "specs", "README.md")),
+    "expected spec manager init to create README.md"
+  );
+});
+
+test("fixture:spec-manager create creates status.json", () => {
+  const dir = tempDir("ccg-spec-manager-create-");
+  run(node, [specManager, "init"], { cwd: dir });
+  const result = run(node, [specManager, "create", "audit-log", "--requirement", "Track audit logging", "--json"], {
+    cwd: dir,
+  });
+  const json = parseJsonOutput(result);
+  assert(json.status.name === "audit-log", "expected status.json to record the spec name");
+  assert(
+    fs.existsSync(path.join(dir, ".codex", "ccg", "specs", "audit-log", "status.json")),
+    "expected status.json to be created"
+  );
+});
+
+test("fixture:spec-manager validate fails without constraints.md", () => {
+  const dir = tempDir("ccg-spec-manager-validate-fail-");
+  run(node, [specManager, "init"], { cwd: dir });
+  run(node, [specManager, "create", "audit-log", "--requirement", "Track audit logging"], { cwd: dir });
+  const result = run(node, [specManager, "validate", "audit-log", "--json"], { cwd: dir, allowFailure: true });
+  const json = parseJsonOutput(result);
+  assert(result.status !== 0, "expected validation to fail without constraints.md");
+  assert(json.valid === false, "expected validate result to be false");
+  assert(
+    json.errors.includes("constraints.md is required"),
+    "expected missing constraints.md to block validation"
+  );
+});
+
+test("fixture:spec-manager validate passes with required sections", () => {
+  const dir = tempDir("ccg-spec-manager-validate-pass-");
+  const researchFile = path.join(dir, "research-input.md");
+  const constraintsFile = path.join(dir, "constraints-input.md");
+  writeFile(researchFile, "# Research\n\nProblem framing.\n");
+  writeFile(
+    constraintsFile,
+    [
+      "## Goal",
+      "Track audit logging.",
+      "",
+      "## Scope",
+      "In-scope behaviors.",
+      "",
+      "## Out of Scope",
+      "No schema rewrite.",
+      "",
+      "## Constraints",
+      "Keep Codex-native paths.",
+      "",
+      "## Acceptance Criteria",
+      "- Emits audit events.",
+      "",
+    ].join("\n")
+  );
+  run(node, [specManager, "init"], { cwd: dir });
+  run(node, [specManager, "create", "audit-log", "--requirement", "Track audit logging"], { cwd: dir });
+  run(node, [specManager, "write-research", "audit-log", "--file", researchFile], { cwd: dir });
+  run(node, [specManager, "write-constraints", "audit-log", "--file", constraintsFile], { cwd: dir });
+  const result = run(node, [specManager, "validate", "audit-log", "--json"], { cwd: dir });
+  const json = parseJsonOutput(result);
+  assert(json.valid === true, "expected validation to pass with required sections");
+  assert(json.status.validation.has_goal === true, "expected goal validation flag");
+  assert(json.status.validation.has_constraints === true, "expected constraints validation flag");
+  assert(json.status.validation.has_acceptance_criteria === true, "expected acceptance criteria validation flag");
+  assert(json.status.validation.has_out_of_scope === true, "expected out-of-scope validation flag");
+});
+
+test("fixture:spec-manager archive writes archive.md and updates status.json", () => {
+  const dir = tempDir("ccg-spec-manager-archive-");
+  const summaryFile = path.join(dir, "summary.md");
+  writeFile(
+    summaryFile,
+    [
+      "## Execution Summary",
+      "Implemented audit logging.",
+      "",
+      "## Verification Results",
+      "node scripts/run-fixture-tests.js",
+      "",
+      "## Residual Risks",
+      "No production smoke yet.",
+      "",
+    ].join("\n")
+  );
+  run(node, [specManager, "init"], { cwd: dir });
+  run(node, [specManager, "create", "audit-log", "--requirement", "Track audit logging"], { cwd: dir });
+  run(node, [specManager, "archive", "audit-log", "--summary-file", summaryFile, "--json"], { cwd: dir });
+  const status = JSON.parse(
+    fs.readFileSync(path.join(dir, ".codex", "ccg", "specs", "audit-log", "status.json"), "utf8")
+  );
+  assert(status.artifacts.archive === true, "expected archive artifact flag to be true");
+  assert(
+    fs.existsSync(path.join(dir, ".codex", "ccg", "specs", "audit-log", "archive.md")),
+    "expected archive.md to be written"
+  );
+});
+
+test("fixture:spec-manager spec skills require validation and refusal gates", () => {
+  const planSkill = fs.readFileSync(path.join(repoRoot, "plugins", "ccg", "skills", "ccg-spec-plan", "SKILL.md"), "utf8");
+  const implSkill = fs.readFileSync(path.join(repoRoot, "plugins", "ccg", "skills", "ccg-spec-impl", "SKILL.md"), "utf8");
+  const reviewSkill = fs.readFileSync(path.join(repoRoot, "plugins", "ccg", "skills", "ccg-spec-review", "SKILL.md"), "utf8");
+  assert(planSkill.includes("spec_manager.js validate"), "expected spec-plan to mention spec_manager validation");
+  assert(planSkill.includes("Refuse"), "expected spec-plan to refuse missing or invalid constraints");
+  assert(implSkill.includes("Refuse to execute"), "expected spec-impl refusal guidance");
+  assert(reviewSkill.includes("Require both constraints and plan"), "expected spec-review evidence requirement");
+});
+
+test("fixture:team-plan-checker parses worker table", () => {
+  const dir = tempDir("ccg-team-checker-parse-");
+  const planFile = path.join(dir, "plan.md");
+  writeFile(
+    planFile,
+    [
+      "## Workers",
+      "| Worker | Scope | Files | Constraints |",
+      "|--------|-------|-------|-------------|",
+      "| backend-1 | API | src/api/a.ts, src/api/b.ts | no schema change |",
+      "| frontend-1 | UI | src/app/page.tsx | use existing design system |",
+      "",
+      "## Merge Strategy",
+      "backend-1 owns API files; frontend-1 owns UI files.",
+      "",
+      "## Verification Strategy",
+      "- node scripts/run-fixture-tests.js",
+      "",
+      "## Conflict Risks",
+      "Low.",
+      "",
+    ].join("\n")
+  );
+  const result = run(node, [teamPlanChecker, "summarize", planFile, "--json"], { cwd: dir });
+  const json = parseJsonOutput(result);
+  assert(json.worker_count === 2, `expected 2 workers, got ${json.worker_count}`);
+  assert(json.workers[0].files.length === 2, "expected file list to be parsed");
+});
+
+test("fixture:team-plan-checker detects same-file conflicts", () => {
+  const dir = tempDir("ccg-team-checker-conflict-");
+  const planDir = path.join(dir, ".codex", "ccg", "team", "audit-log");
+  const planFile = path.join(planDir, "plan.md");
+  writeFile(
+    planFile,
+    [
+      "## Workers",
+      "| Worker | Scope | Files | Constraints |",
+      "|--------|-------|-------|-------------|",
+      "| backend-1 | API | src/api/a.ts | no schema change |",
+      "| backend-2 | Jobs | src/api/a.ts | keep migrations untouched |",
+      "",
+      "## Merge Strategy",
+      "Codex will look later.",
+      "",
+      "## Verification Strategy",
+      "- node scripts/run-fixture-tests.js",
+      "",
+      "## Conflict Risks",
+      "Two workers want the same file.",
+      "",
+    ].join("\n")
+  );
+  const result = run(node, [teamPlanChecker, "validate", planFile, "--json"], { cwd: dir, allowFailure: true });
+  const json = parseJsonOutput(result);
+  assert(result.status !== 0, "expected validate to fail without an explicit merge strategy");
+  assert(json.same_file_conflicts.length === 1, "expected a same-file conflict to be detected");
+  assert(
+    json.blocking_reasons.some((reason) => reason.includes("same file conflict")),
+    "expected a blocking reason for same-file conflict"
+  );
+  assert(
+    fs.existsSync(path.join(planDir, "status.json")),
+    "expected validate to write team status.json next to plan.md"
+  );
+});
+
+test("fixture:team-plan-checker allows conflict with explicit merge strategy", () => {
+  const dir = tempDir("ccg-team-checker-allow-");
+  const planFile = path.join(dir, "plan.md");
+  writeFile(
+    planFile,
+    [
+      "## Workers",
+      "| Worker | Scope | Files | Constraints |",
+      "|--------|-------|-------|-------------|",
+      "| backend-1 | API | src/api/a.ts | no schema change |",
+      "| backend-2 | Jobs | src/api/a.ts | keep migrations untouched |",
+      "",
+      "## Merge Strategy",
+      "Codex will reconcile src/api/a.ts after backend-1 and backend-2 finish, and backend-1 is the final owner.",
+      "",
+      "## Verification Strategy",
+      "- node scripts/run-fixture-tests.js",
+      "",
+      "## Conflict Risks",
+      "Managed by explicit ownership.",
+      "",
+    ].join("\n")
+  );
+  const result = run(node, [teamPlanChecker, "validate", planFile, "--json"], { cwd: dir });
+  const json = parseJsonOutput(result);
+  assert(json.can_execute === true, "expected explicit merge strategy to allow execution");
+});
+
+test("fixture:team-plan-checker team skills require checker and status evidence", () => {
+  const execSkill = fs.readFileSync(path.join(repoRoot, "plugins", "ccg", "skills", "ccg-team-exec", "SKILL.md"), "utf8");
+  const reviewSkill = fs.readFileSync(path.join(repoRoot, "plugins", "ccg", "skills", "ccg-team-review", "SKILL.md"), "utf8");
+  assert(execSkill.includes("team_plan_checker.js validate"), "expected team-exec to require checker validation");
+  assert(execSkill.includes("status.json"), "expected team-exec to mention status.json");
+  assert(reviewSkill.includes("status.json"), "expected team-review to require status evidence");
+});
+
+test("fixture:rollback-confirm-exec confirm executes revert --no-commit", () => {
+  const dir = initGitRepo();
+  writeFile(path.join(dir, "src", "app.js"), "console.log('updated');\n");
+  run("git", ["add", "src/app.js"], { cwd: dir });
+  run("git", ["commit", "-m", "update"], { cwd: dir });
+  const sha = run("git", ["rev-parse", "HEAD"], { cwd: dir }).stdout.trim();
+  const result = run(
+    node,
+    [rollbackHelper, "--target", sha, "--mode", "revert", "--confirm", "--protected-branch-ok", "--json"],
+    { cwd: dir }
+  );
+  const json = parseJsonOutput(result);
+  assert(json.executed === true, "expected revert execution");
+  const cached = run("git", ["diff", "--cached", "--name-only"], { cwd: dir }).stdout;
+  assert(cached.includes("src/app.js"), "expected revert --no-commit to stage the reverted file");
+});
+
+test("fixture:rollback-confirm-exec confirm executes file restore", () => {
+  const dir = initGitRepo();
+  writeFile(path.join(dir, "src", "app.js"), "console.log('dirty');\n");
+  const expected = run("git", ["show", "HEAD:src/app.js"], { cwd: dir }).stdout.replace(/\r\n/g, "\n");
+  const result = run(
+    node,
+    [rollbackHelper, "--file", "src/app.js", "--target", "HEAD", "--confirm", "--protected-branch-ok", "--json"],
+    { cwd: dir }
+  );
+  const json = parseJsonOutput(result);
+  assert(json.executed === true, "expected file restore execution");
+  const content = fs.readFileSync(path.join(dir, "src", "app.js"), "utf8").replace(/\r\n/g, "\n");
+  assert(content === expected, "expected file content to be restored from HEAD");
+});
+
+test("fixture:rollback-confirm-exec refuses push --force always", () => {
+  const dir = initGitRepo();
+  const result = run(node, [rollbackHelper, "push", "--force", "--json"], { cwd: dir, allowFailure: true });
+  const json = parseJsonOutput(result);
+  assert(result.status !== 0, "expected force push refusal");
+  assert(json.blocked === true, "expected blocked force push result");
+  assert(json.manualOnly === true, "expected force push to remain manual-only");
+});
+
+test("fixture:rollback-confirm-exec protected branch requires --protected-branch-ok", () => {
+  const dir = initGitRepo();
+  writeFile(path.join(dir, "src", "app.js"), "console.log('updated');\n");
+  run("git", ["add", "src/app.js"], { cwd: dir });
+  run("git", ["commit", "-m", "update"], { cwd: dir });
+  const sha = run("git", ["rev-parse", "HEAD"], { cwd: dir }).stdout.trim();
+  const result = run(node, [rollbackHelper, "--target", sha, "--mode", "revert", "--branch", "main", "--confirm", "--json"], {
+    cwd: dir,
+    allowFailure: true,
+  });
+  const json = parseJsonOutput(result);
+  assert(result.status !== 0, "expected protected branch guard to fail without explicit acknowledgment");
+  assert(
+    String(json.reason || "").includes("protected branch"),
+    "expected protected branch reason in JSON output"
+  );
+});
+
+test("fixture:commit-gate-runner detects staged, unstaged, and untracked files", () => {
+  const dir = initGitRepo();
+  writeFile(path.join(dir, "src", "app.js"), "console.log('unstaged');\n");
+  writeFile(path.join(dir, "src", "staged.js"), "export const staged = true;\n");
+  writeFile(path.join(dir, "src", "todo.js"), "export const todo = true;\n");
+  run("git", ["add", "src/staged.js"], { cwd: dir });
+  const result = run(node, [commitHelper, "--json"], { cwd: dir });
+  const json = parseJsonOutput(result);
+  assert(json.staged.includes("src/staged.js"), "expected staged file detection");
+  assert(json.unstaged.includes("src/app.js"), "expected unstaged file detection");
+  assert(json.untracked.includes("src/todo.js"), "expected untracked file detection");
+});
+
+test("fixture:commit-gate-runner --check-gates runs verify-change", () => {
+  const dir = initGitRepo();
+  const logFile = path.join(dir, "gate-log.jsonl");
+  const fakeChange = createFakeGateScript(
+    path.join(dir, "fake-change.js"),
+    {
+      passed: true,
+      total_additions: 1,
+      total_deletions: 0,
+      affected_modules: ["src"],
+      changes: [],
+      issues: [],
+    }
+  );
+  const fakeQuality = createFakeGateScript(
+    path.join(dir, "fake-quality.js"),
+    {
+      scan_path: ".",
+      files_scanned: 1,
+      total_lines: 1,
+      total_code_lines: 1,
+      passed: true,
+      error_count: 0,
+      warning_count: 0,
+      file_metrics: [],
+      issues: [],
+    }
+  );
+  writeFile(path.join(dir, "src", "app.js"), "console.log('gate');\n");
+  run("git", ["add", "src/app.js"], { cwd: dir });
+  const result = run(node, [commitHelper, "--check-gates", "--json"], {
+    cwd: dir,
+    env: {
+      CCG_VERIFY_CHANGE_SCRIPT: fakeChange,
+      CCG_VERIFY_QUALITY_SCRIPT: fakeQuality,
+      CCG_GATE_LOG: logFile,
+    },
+  });
+  const json = parseJsonOutput(result);
+  const logs = readJsonLines(logFile);
+  assert(json.gates["verify-change"].ran === true, "expected verify-change gate to run");
+  assert(logs.some((entry) => entry.script === "fake-change.js"), "expected fake verify-change invocation");
+});
+
+test("fixture:commit-gate-runner security-sensitive path triggers verify-security", () => {
+  const dir = initGitRepo();
+  const logFile = path.join(dir, "gate-log.jsonl");
+  const fakeChange = createFakeGateScript(
+    path.join(dir, "fake-change.js"),
+    {
+      passed: true,
+      total_additions: 1,
+      total_deletions: 0,
+      affected_modules: ["src"],
+      changes: [],
+      issues: [],
+    }
+  );
+  const fakeQuality = createFakeGateScript(
+    path.join(dir, "fake-quality.js"),
+    {
+      scan_path: ".",
+      files_scanned: 1,
+      total_lines: 1,
+      total_code_lines: 1,
+      passed: true,
+      error_count: 0,
+      warning_count: 0,
+      file_metrics: [],
+      issues: [],
+    }
+  );
+  const fakeSecurity = createFakeGateScript(
+    path.join(dir, "fake-security.js"),
+    {
+      scan_path: ".",
+      files_scanned: 1,
+      passed: true,
+      counts: { critical: 0, high: 0, medium: 0, low: 0, info: 0 },
+      findings: [],
+    }
+  );
+  writeFile(path.join(dir, "src", "auth.js"), "export const authToken = 'x';\n");
+  run("git", ["add", "src/auth.js"], { cwd: dir });
+  const result = run(node, [commitHelper, "--check-gates", "--json"], {
+    cwd: dir,
+    env: {
+      CCG_VERIFY_CHANGE_SCRIPT: fakeChange,
+      CCG_VERIFY_QUALITY_SCRIPT: fakeQuality,
+      CCG_VERIFY_SECURITY_SCRIPT: fakeSecurity,
+      CCG_GATE_LOG: logFile,
+    },
+  });
+  const json = parseJsonOutput(result);
+  const logs = readJsonLines(logFile);
+  assert(json.gates["verify-security"].ran === true, "expected verify-security gate to run");
+  assert(logs.some((entry) => entry.script === "fake-security.js"), "expected fake verify-security invocation");
+});
+
+test("fixture:commit-gate-runner refuses --execute with no staged files", () => {
+  const dir = initGitRepo();
+  writeFile(path.join(dir, "src", "app.js"), "console.log('no-stage');\n");
+  const result = run(node, [commitHelper, "--execute", "--json"], { cwd: dir, allowFailure: true });
+  const json = parseJsonOutput(result);
+  assert(result.status !== 0, "expected execute refusal without staged files");
+  assert(json.staged.length === 0, "expected staged list to be empty");
+});
+
+test("fixture:commit-gate-runner refuses --execute when gate fails", () => {
+  const dir = initGitRepo();
+  const fakeChange = createFakeGateScript(
+    path.join(dir, "fake-change.js"),
+    {
+      passed: true,
+      total_additions: 1,
+      total_deletions: 0,
+      affected_modules: ["src"],
+      changes: [],
+      issues: [],
+    }
+  );
+  const fakeQuality = createFakeGateScript(
+    path.join(dir, "fake-quality.js"),
+    {
+      scan_path: ".",
+      files_scanned: 1,
+      total_lines: 1,
+      total_code_lines: 1,
+      passed: false,
+      error_count: 1,
+      warning_count: 0,
+      file_metrics: [],
+      issues: [{ severity: "error", message: "blocked" }],
+    },
+    1
+  );
+  writeFile(path.join(dir, "src", "app.js"), "console.log('blocked');\n");
+  run("git", ["add", "src/app.js"], { cwd: dir });
+  const result = run(node, [commitHelper, "--execute", "--json"], {
+    cwd: dir,
+    allowFailure: true,
+    env: {
+      CCG_VERIFY_CHANGE_SCRIPT: fakeChange,
+      CCG_VERIFY_QUALITY_SCRIPT: fakeQuality,
+    },
+  });
+  const json = parseJsonOutput(result);
+  assert(result.status !== 0, "expected execute refusal when a gate fails");
+  assert(json.canCommit === false, "expected canCommit=false when a gate fails");
+});
+
+test("fixture:commit-gate-runner executes when staged files and gates pass", () => {
+  const dir = initGitRepo();
+  const fakeChange = createFakeGateScript(
+    path.join(dir, "fake-change.js"),
+    {
+      passed: true,
+      total_additions: 1,
+      total_deletions: 0,
+      affected_modules: ["src"],
+      changes: [],
+      issues: [],
+    }
+  );
+  const fakeQuality = createFakeGateScript(
+    path.join(dir, "fake-quality.js"),
+    {
+      scan_path: ".",
+      files_scanned: 1,
+      total_lines: 1,
+      total_code_lines: 1,
+      passed: true,
+      error_count: 0,
+      warning_count: 0,
+      file_metrics: [],
+      issues: [],
+    }
+  );
+  writeFile(path.join(dir, "src", "app.js"), "console.log('commit');\n");
+  run("git", ["add", "src/app.js"], { cwd: dir });
+  const result = run(node, [commitHelper, "--execute", "--json"], {
+    cwd: dir,
+    env: {
+      CCG_VERIFY_CHANGE_SCRIPT: fakeChange,
+      CCG_VERIFY_QUALITY_SCRIPT: fakeQuality,
+    },
+  });
+  const json = parseJsonOutput(result);
+  const commitCount = Number(run("git", ["rev-list", "--count", "HEAD"], { cwd: dir }).stdout.trim());
+  assert(json.executed === true, "expected commit execution");
+  assert(commitCount === 2, `expected a second commit after execution, got ${commitCount}`);
 });
 
 test("fixture:spec spec skills require Codex spec storage", () => {
