@@ -1,6 +1,6 @@
 ---
-description: "Prepare a safe CCG commit with optional gate collection"
-argument-hint: "[--check-gates] [--execute|--confirm]"
+description: "Prepare a safe CCG commit with optional scoped gate collection"
+argument-hint: "[--check-gates] [--scope staged|all] [--execute|--confirm]"
 allowed-tools: [Read, Glob, Grep, Bash, Edit, Write, WebFetch]
 ---
 

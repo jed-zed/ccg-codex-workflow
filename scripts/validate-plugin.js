@@ -348,7 +348,7 @@ function validateFullParityBehavior() {
     path.join(repoRoot, "plugins/ccg/skills/ccg-spec-init/scripts/spec_manager.js"),
     "utf8"
   );
-  for (const phrase of ["status.json", "write-research", "write-constraints", "validate", "archive"]) {
+  for (const phrase of ["status.json", "requirement.md", "schema_version", "write-research", "write-constraints", "validate", "archive"]) {
     if (!specManager.includes(phrase)) fail(`spec_manager.js is missing behavior phrase: ${phrase}`);
   }
 
@@ -356,7 +356,7 @@ function validateFullParityBehavior() {
     path.join(repoRoot, "plugins/ccg/skills/ccg-team/scripts/team_plan_checker.js"),
     "utf8"
   );
-  for (const phrase of ["same_file_conflicts", "can_execute", "blocking_reasons", "status.json"]) {
+  for (const phrase of ["same_file_conflicts", "can_execute", "blocking_reasons", "status.json", "--no-write-status", "--write-status"]) {
     if (!teamChecker.includes(phrase)) fail(`team_plan_checker.js is missing behavior phrase: ${phrase}`);
   }
 
@@ -366,7 +366,10 @@ function validateFullParityBehavior() {
   );
   for (const phrase of [
     "--check-gates",
+    "--scope",
     "--allow-gate-warnings",
+    "gatedScanTargets",
+    "scope_warnings",
     "CCG_VERIFY_CHANGE_SCRIPT",
     "CCG_VERIFY_QUALITY_SCRIPT",
     "CCG_VERIFY_SECURITY_SCRIPT",
@@ -381,6 +384,9 @@ function validateFullParityBehavior() {
   );
   for (const phrase of [
     "--protected-branch-ok",
+    "--allow-dirty",
+    "--only-if-clean",
+    "dirtyPreflight",
     "git revert --no-commit",
     "git restore --source=",
     "git reset --hard remains manual-only",
@@ -395,17 +401,20 @@ function validateFullParityBehavior() {
     "fixture:team-plan-checker",
     "fixture:rollback-confirm-exec",
     "fixture:commit-gate-runner",
+    "--scope staged reports unstaged and untracked warnings",
+    "restore refuses dirty touched file",
+    "summarize and conflicts do not write status.json",
   ]) {
     if (!fixtures.includes(marker)) fail(`run-fixture-tests.js is missing behavior fixture marker: ${marker}`);
   }
 
   const specDocs = fs.readFileSync(path.join(repoRoot, "docs/spec-workflow.md"), "utf8");
-  for (const phrase of ["status.json", "spec_manager.js", "validate <spec-name> --json"]) {
+  for (const phrase of ["status.json", "requirement.md", "schema_version", "spec_manager.js", "validate <spec-name> --json"]) {
     if (!specDocs.includes(phrase)) fail(`spec workflow docs are missing behavior phrase: ${phrase}`);
   }
 
   const teamDocs = fs.readFileSync(path.join(repoRoot, "docs/team-workflow.md"), "utf8");
-  for (const phrase of ["team_plan_checker.js", "status.json", "can_execute"]) {
+  for (const phrase of ["team_plan_checker.js", "status.json", "can_execute", "--write-status", "--no-write-status"]) {
     if (!teamDocs.includes(phrase)) fail(`team workflow docs are missing behavior phrase: ${phrase}`);
   }
 

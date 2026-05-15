@@ -12,7 +12,8 @@ Help prepare a commit without surprising the user.
 - Run `git status --short`.
 - Distinguish staged, unstaged, and untracked files.
 - Recommend `/ccg:verify-change`, `/ccg:verify-quality <changed-path>`, and `/ccg:verify-security <changed-path>` when the diff is broad or security-sensitive.
-- Use `scripts/commit_helper.js --check-gates --json` to collect gate status before recommending a direct commit.
+- Use `scripts/commit_helper.js --check-gates --json` to collect full-worktree gate status before recommending a direct commit.
+- Use `--scope staged|all` for gate collection. `--check-gates` defaults to `all`; `--execute` / `--confirm` defaults to `staged` and reports unstaged/untracked files as scope warnings.
 - Generate a concise conventional commit message.
 - Default to showing the command:
 

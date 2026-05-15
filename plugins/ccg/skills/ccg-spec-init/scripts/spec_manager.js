@@ -12,6 +12,7 @@ Each spec lives under:
 
 \`\`\`text
 .codex/ccg/specs/<spec-name>/
+  requirement.md
   research.md
   constraints.md
   plan.md
@@ -115,6 +116,14 @@ function artifactPath(specName, artifactName, cwd = process.cwd()) {
   return path.join(specDir(specName, cwd), artifactName);
 }
 
+function requirementInfo(specName, cwd = process.cwd()) {
+  const requirementFile = artifactPath(specName, "requirement.md", cwd);
+  return {
+    present: fs.existsSync(requirementFile),
+    path: "requirement.md",
+  };
+}
+
 function ensureRoot(cwd = process.cwd()) {
   const root = specsRoot(cwd);
   ensureDirectory(root);
@@ -153,6 +162,10 @@ function collectArtifacts(specName, cwd = process.cwd()) {
     review: fs.existsSync(artifactPath(specName, "review.md", cwd)),
     archive: fs.existsSync(artifactPath(specName, "archive.md", cwd)),
   };
+}
+
+function formatRequirement(requirement) {
+  return ["# Requirement", "", requirement.trim(), ""].join("\n");
 }
 
 function collectValidation(specName, cwd = process.cwd()) {
@@ -252,9 +265,11 @@ function saveStatus(specName, cwd = process.cwd()) {
   ensureSpecExists(specName, cwd);
   const previous = loadPreviousStatus(specName, cwd);
   const status = {
+    schema_version: 1,
     name: specName,
     created_at: previous && previous.created_at ? previous.created_at : nowIso(),
     updated_at: nowIso(),
+    requirement: requirementInfo(specName, cwd),
     artifacts: collectArtifacts(specName, cwd),
     validation: collectValidation(specName, cwd).validation,
   };
@@ -318,6 +333,7 @@ function run(command, args, cwd = process.cwd()) {
       throw new CliError(`spec already exists: ${specName}`);
     }
     ensureDirectory(dir);
+    fs.writeFileSync(artifactPath(specName, "requirement.md", cwd), formatRequirement(requirement), "utf8");
     const status = saveStatus(specName, cwd);
     return { command, spec: specName, requirement, created: true, status };
   }
@@ -421,6 +437,7 @@ module.exports = {
   collectArtifacts,
   collectValidation,
   hasSection,
+  requirementInfo,
   saveStatus,
   specDir,
   specsRoot,

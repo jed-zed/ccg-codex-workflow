@@ -34,6 +34,10 @@ function currentBranch(cwd = process.cwd()) {
   return result.status === 0 ? result.stdout.trim() || null : null;
 }
 
+function normalizeFile(filePath) {
+  return filePath.replace(/\\/g, "/").replace(/^\.\//, "");
+}
+
 function isProtectedBranch(branchName) {
   return Boolean(branchName) && PROTECTED_BRANCH_PATTERNS.some((pattern) => pattern.test(branchName));
 }
@@ -68,6 +72,10 @@ function buildResult(options) {
     file: options.file || null,
     commands: options.commands || [],
     reason: options.reason || null,
+    warnings: options.warnings || [],
+    dirtyFiles: options.dirtyFiles || [],
+    dirtyTouchedFiles: options.dirtyTouchedFiles || [],
+    dirtyUnrelatedFiles: options.dirtyUnrelatedFiles || [],
   };
 }
 
@@ -78,11 +86,75 @@ function buildRevertSpec(target, depth) {
   return target;
 }
 
+function parseDirtyFiles(cwd = process.cwd()) {
+  return git(["status", "--porcelain"], { cwd, allowFailure: true })
+    .stdout.split(/\r?\n/)
+    .map((line) => line.trimEnd())
+    .filter(Boolean)
+    .map((line) => {
+      let filePath = line.slice(3);
+      if (filePath.includes(" -> ")) filePath = filePath.split(" -> ").pop();
+      return { status: line.slice(0, 2), path: normalizeFile(filePath) };
+    });
+}
+
+function revertTouchedFiles(revertSpec, cwd = process.cwd()) {
+  const args = revertSpec.includes("..")
+    ? ["diff", "--name-only", revertSpec]
+    : ["diff-tree", "--no-commit-id", "--name-only", "-r", revertSpec];
+  return git(args, { cwd, allowFailure: true })
+    .stdout.split(/\r?\n/)
+    .map((line) => normalizeFile(line.trim()))
+    .filter(Boolean);
+}
+
+function dirtyPreflight({ cwd, mode, target, file, confirm, allowDirty, onlyIfClean }) {
+  const dirtyFiles = parseDirtyFiles(cwd);
+  const touchedFiles = mode === "restore" ? [normalizeFile(file)] : revertTouchedFiles(target, cwd);
+  const touchedSet = new Set(touchedFiles);
+  const dirtyTouchedFiles = dirtyFiles.filter((entry) => touchedSet.has(entry.path));
+  const dirtyUnrelatedFiles = dirtyFiles.filter((entry) => !touchedSet.has(entry.path));
+  const warnings = [];
+
+  if (dirtyUnrelatedFiles.length) {
+    warnings.push(`dirty unrelated files present: ${dirtyUnrelatedFiles.map((entry) => entry.path).join(", ")}`);
+  }
+  if (dirtyTouchedFiles.length && allowDirty) {
+    warnings.push(`dirty touched files will be overwritten: ${dirtyTouchedFiles.map((entry) => entry.path).join(", ")}`);
+  }
+
+  if (confirm && onlyIfClean && dirtyFiles.length) {
+    return {
+      blocked: true,
+      reason: "--only-if-clean requires a clean worktree",
+      dirtyFiles,
+      dirtyTouchedFiles,
+      dirtyUnrelatedFiles,
+      warnings,
+    };
+  }
+
+  if (confirm && dirtyTouchedFiles.length && !allowDirty) {
+    return {
+      blocked: true,
+      reason: `dirty touched files require --allow-dirty: ${dirtyTouchedFiles.map((entry) => entry.path).join(", ")}`,
+      dirtyFiles,
+      dirtyTouchedFiles,
+      dirtyUnrelatedFiles,
+      warnings,
+    };
+  }
+
+  return { blocked: false, dirtyFiles, dirtyTouchedFiles, dirtyUnrelatedFiles, warnings };
+}
+
 function plan(argv = process.argv.slice(2), cwd = process.cwd()) {
   const args = argv.filter((arg) => arg !== "--json");
   const confirm = args.includes("--confirm");
   const understand = args.includes("--i-understand");
   const protectedBranchOk = args.includes("--protected-branch-ok");
+  const allowDirty = args.includes("--allow-dirty");
+  const onlyIfClean = args.includes("--only-if-clean");
   const file = getFlagValue(args, "--file");
   const explicitMode = getFlagValue(args, "--mode");
   const compatibilityMode = parseCompatibilityMode(args);
@@ -190,6 +262,26 @@ function plan(argv = process.argv.slice(2), cwd = process.cwd()) {
 
   if (mode === "restore") {
     const command = `git restore --source=${target} -- ${file}`;
+    const preflight = dirtyPreflight({ cwd, mode, target, file, confirm, allowDirty, onlyIfClean });
+    if (preflight.blocked) {
+      throw new CliError(
+        preflight.reason,
+        buildResult({
+          dryRun: true,
+          blocked: true,
+          mode,
+          target,
+          branch,
+          file,
+          commands: [command],
+          reason: preflight.reason,
+          warnings: preflight.warnings,
+          dirtyFiles: preflight.dirtyFiles,
+          dirtyTouchedFiles: preflight.dirtyTouchedFiles,
+          dirtyUnrelatedFiles: preflight.dirtyUnrelatedFiles,
+        })
+      );
+    }
     const result = buildResult({
       dryRun: !confirm,
       executed: false,
@@ -198,6 +290,10 @@ function plan(argv = process.argv.slice(2), cwd = process.cwd()) {
       branch,
       file,
       commands: [command],
+      warnings: preflight.warnings,
+      dirtyFiles: preflight.dirtyFiles,
+      dirtyTouchedFiles: preflight.dirtyTouchedFiles,
+      dirtyUnrelatedFiles: preflight.dirtyUnrelatedFiles,
     });
     if (confirm) {
       git(["restore", `--source=${target}`, "--", file], { cwd });
@@ -209,6 +305,25 @@ function plan(argv = process.argv.slice(2), cwd = process.cwd()) {
 
   const revertSpec = buildRevertSpec(target, depth);
   const command = `git revert --no-commit ${revertSpec}`;
+  const preflight = dirtyPreflight({ cwd, mode: "revert", target: revertSpec, file, confirm, allowDirty, onlyIfClean });
+  if (preflight.blocked) {
+    throw new CliError(
+      preflight.reason,
+      buildResult({
+        dryRun: true,
+        blocked: true,
+        mode: "revert",
+        target: revertSpec,
+        branch,
+        commands: [command],
+        reason: preflight.reason,
+        warnings: preflight.warnings,
+        dirtyFiles: preflight.dirtyFiles,
+        dirtyTouchedFiles: preflight.dirtyTouchedFiles,
+        dirtyUnrelatedFiles: preflight.dirtyUnrelatedFiles,
+      })
+    );
+  }
   const result = buildResult({
     dryRun: !confirm,
     executed: false,
@@ -216,6 +331,10 @@ function plan(argv = process.argv.slice(2), cwd = process.cwd()) {
     target: revertSpec,
     branch,
     commands: [command],
+    warnings: preflight.warnings,
+    dirtyFiles: preflight.dirtyFiles,
+    dirtyTouchedFiles: preflight.dirtyTouchedFiles,
+    dirtyUnrelatedFiles: preflight.dirtyUnrelatedFiles,
   });
   if (confirm) {
     git(["revert", "--no-commit", revertSpec], { cwd });
@@ -230,6 +349,10 @@ function formatHuman(result) {
   lines.push(`mode: ${result.mode}`);
   if (result.branch) lines.push(`branch: ${result.branch}`);
   if (result.reason) lines.push(`reason: ${result.reason}`);
+  if (result.warnings && result.warnings.length) {
+    lines.push("warnings:");
+    for (const warning of result.warnings) lines.push(`- ${warning}`);
+  }
   for (const command of result.commands) lines.push(command);
   return lines.join("\n");
 }
@@ -254,4 +377,12 @@ if (require.main === module) {
   }
 }
 
-module.exports = { currentBranch, hasDangerousClean, hasDangerousForcePush, isProtectedBranch, plan };
+module.exports = {
+  currentBranch,
+  dirtyPreflight,
+  hasDangerousClean,
+  hasDangerousForcePush,
+  isProtectedBranch,
+  parseDirtyFiles,
+  plan,
+};

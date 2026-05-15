@@ -183,7 +183,7 @@ function writeStatus(planPath, result) {
   return statusPath;
 }
 
-function validatePlan(planPath) {
+function validatePlan(planPath, options = {}) {
   if (!planPath) throw new CliError("plan path is required");
   if (!fs.existsSync(planPath)) throw new CliError(`plan does not exist: ${planPath}`);
   const markdown = fs.readFileSync(planPath, "utf8");
@@ -219,12 +219,13 @@ function validatePlan(planPath) {
     conflict_risks_text: conflictRisksText,
   };
 
-  result.status_path = writeStatus(planPath, result);
+  result.status_path = options.writeStatus === false ? null : writeStatus(planPath, result);
+  result.status_written = Boolean(result.status_path);
   return result;
 }
 
-function summarizePlan(planPath) {
-  const result = validatePlan(planPath);
+function summarizePlan(planPath, options = {}) {
+  const result = validatePlan(planPath, { writeStatus: Boolean(options.writeStatus) });
   return {
     plan_path: result.plan_path,
     worker_count: result.workers.length,
@@ -236,11 +237,12 @@ function summarizePlan(planPath) {
     has_conflict_risks: result.has_conflict_risks,
     can_execute: result.can_execute,
     status_path: result.status_path,
+    status_written: result.status_written,
   };
 }
 
-function conflictsOnly(planPath) {
-  const result = validatePlan(planPath);
+function conflictsOnly(planPath, options = {}) {
+  const result = validatePlan(planPath, { writeStatus: Boolean(options.writeStatus) });
   return {
     plan_path: result.plan_path,
     same_file_conflicts: result.same_file_conflicts,
@@ -248,6 +250,7 @@ function conflictsOnly(planPath) {
     blocking_reasons: result.blocking_reasons.filter((reason) => reason.includes("same file conflict")),
     can_execute: result.can_execute,
     status_path: result.status_path,
+    status_written: result.status_written,
   };
 }
 
@@ -268,12 +271,19 @@ function main(argv = process.argv.slice(2)) {
   const args = argv.filter((arg) => arg !== "--json");
   const command = args.shift();
   const planPath = args.shift();
-  if (!command) throw new CliError("usage: team_plan_checker.js <validate|summarize|conflicts> <plan.md> [--json]");
+  if (!command) {
+    throw new CliError(
+      "usage: team_plan_checker.js <validate|summarize|conflicts> <plan.md> [--json] [--write-status|--no-write-status]"
+    );
+  }
+  const writeStatusFlag = args.includes("--write-status");
+  const noWriteStatusFlag = args.includes("--no-write-status");
+  const shouldWriteStatus = writeStatusFlag || (command === "validate" && !noWriteStatusFlag);
 
   let result;
-  if (command === "validate") result = validatePlan(planPath);
-  else if (command === "summarize") result = summarizePlan(planPath);
-  else if (command === "conflicts") result = conflictsOnly(planPath);
+  if (command === "validate") result = validatePlan(planPath, { writeStatus: shouldWriteStatus });
+  else if (command === "summarize") result = summarizePlan(planPath, { writeStatus: shouldWriteStatus });
+  else if (command === "conflicts") result = conflictsOnly(planPath, { writeStatus: shouldWriteStatus });
   else throw new CliError(`unknown command: ${command}`);
 
   if (json) console.log(JSON.stringify(result, null, 2));
