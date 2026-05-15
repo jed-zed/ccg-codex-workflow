@@ -244,6 +244,15 @@ const geminiPreview = path.join(
   "scripts",
   "invoke_gemini_preview.py"
 );
+const gptproBridge = path.join(
+  repoRoot,
+  "plugins",
+  "ccg",
+  "skills",
+  "ccg-gptpro-bridge",
+  "scripts",
+  "gptpro_bridge.py"
+);
 const geminiTemplateDir = path.join(repoRoot, "plugins", "ccg", "skills", "ccg-executor", "templates", "gemini");
 const pluginDoctor = path.join(repoRoot, "plugins", "ccg", "scripts", "doctor.ps1");
 const syncLocalPluginCache = path.join(repoRoot, "scripts", "sync-local-plugin-cache.ps1");
@@ -778,6 +787,306 @@ print("PREVIEW_HOLD=" + str(module.effective_hold_seconds(args)))
   assert(result.stdout.includes("HAS_RAW_STREAM=True"), `expected raw stream pane in preview:\n${result.stdout}`);
   assert(result.stdout.includes("HEADLESS_HOLD=0"), `expected headless smoke to remain fast:\n${result.stdout}`);
   assert(result.stdout.includes("PREVIEW_HOLD=5"), `expected visible preview to keep final state:\n${result.stdout}`);
+});
+
+test("fixture:gptpro-bridge creates prompt, response, and status artifacts", () => {
+  const dir = tempDir("ccg-gptpro-artifacts-");
+  const outputRoot = path.join(dir, ".codex", "ccg", "gptpro");
+  const result = run(python, [
+    gptproBridge,
+    "--mode",
+    "plan",
+    "--workdir",
+    dir,
+    "--prompt",
+    "Plan an audit log bridge.",
+    "--slug",
+    "audit-log",
+    "--output-root",
+    outputRoot,
+    "--hold-seconds",
+    "0",
+  ]);
+  assert(result.stdout.includes("CCG_GPTPRO_PROVIDER=chatgpt-pro-manual"), "expected provider output");
+  assert(result.stdout.includes("CCG_GPTPRO_MANUAL_QUESTIONS_EXPECTED=1"), "expected expected question budget");
+  assert(result.stdout.includes("CCG_GPTPRO_MANUAL_QUESTIONS_MAX=2"), "expected max question budget");
+
+  const sessionLine = result.stdout.split(/\r?\n/).find((line) => line.startsWith("CCG_GPTPRO_SESSION_DIR="));
+  assert(sessionLine, `expected session dir in stdout:\n${result.stdout}`);
+  const sessionDir = sessionLine.split("=").slice(1).join("=");
+  const statusPath = path.join(sessionDir, "status.json");
+  const promptPath = path.join(sessionDir, "round-1", "prompt.md");
+  const responsePath = path.join(sessionDir, "round-1", "response.md");
+  assert(fs.existsSync(statusPath), "expected status.json");
+  assert(fs.existsSync(promptPath), "expected prompt.md");
+  assert(fs.existsSync(responsePath), "expected response.md placeholder");
+
+  const status = JSON.parse(fs.readFileSync(statusPath, "utf8"));
+  assert(status.provider === "chatgpt-pro-manual", "expected manual provider");
+  assert(status.manual_questions_expected === 1, "expected manual_questions_expected=1");
+  assert(status.manual_questions_max === 2, "expected manual_questions_max=2");
+  assert(status.web_automation === false, "expected web_automation=false");
+  assert(status.dom_extraction === false, "expected dom_extraction=false");
+  assert(status.manual_copy_required === true, "expected manual_copy_required=true");
+  assert(status.rounds["round-1"].response_saved === false, "expected unsaved response initially");
+  assert(fs.readFileSync(promptPath, "utf8").includes("Plan an audit log bridge."), "expected prompt text");
+});
+
+test("fixture:gptpro-bridge local save writes response.md", () => {
+  const dir = tempDir("ccg-gptpro-save-");
+  const snippet = `
+import importlib.util, json, pathlib, sys, urllib.request
+script = pathlib.Path(sys.argv[1])
+root = pathlib.Path(sys.argv[2])
+spec = importlib.util.spec_from_file_location("gptpro_bridge", script)
+module = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(module)
+session = module.create_session(
+    mode="review",
+    workdir=root,
+    prompt="Review this diff.",
+    slug="review-diff",
+    output_root=root / ".codex" / "ccg" / "gptpro",
+    round_number=1,
+    followup_session=None,
+    followup_reason=None,
+)
+server, url = module.start_server(session, open_browser=False)
+try:
+    data = json.dumps({"response": "manual GPT Pro output"}).encode("utf-8")
+    req = urllib.request.Request(
+        url + "save-response",
+        data=data,
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    with urllib.request.urlopen(req, timeout=5) as response:
+        print("SAVE_STATUS=" + str(response.status))
+    with urllib.request.urlopen(url + "state", timeout=5) as response:
+        state = json.loads(response.read().decode("utf-8"))
+    response_file = pathlib.Path(state["response_file"])
+    status_file = pathlib.Path(state["status_file"])
+    status = json.loads(status_file.read_text(encoding="utf-8"))
+    print("RESPONSE_TEXT=" + response_file.read_text(encoding="utf-8"))
+    print("RESPONSE_SAVED=" + str(status["rounds"]["round-1"]["response_saved"]))
+finally:
+    server.shutdown()
+    server.server_close()
+`;
+  const result = run(python, ["-c", snippet, gptproBridge, dir]);
+  assert(result.stdout.includes("SAVE_STATUS=200"), `expected save status:\n${result.stdout}`);
+  assert(result.stdout.includes("RESPONSE_TEXT=manual GPT Pro output"), `expected saved response:\n${result.stdout}`);
+  assert(result.stdout.includes("RESPONSE_SAVED=True"), `expected status update:\n${result.stdout}`);
+});
+
+test("fixture:gptpro-bridge rejects empty manual response", () => {
+  const dir = tempDir("ccg-gptpro-empty-response-");
+  const snippet = `
+import importlib.util, json, pathlib, sys, urllib.error, urllib.request
+script = pathlib.Path(sys.argv[1])
+root = pathlib.Path(sys.argv[2])
+spec = importlib.util.spec_from_file_location("gptpro_bridge", script)
+module = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(module)
+session = module.create_session(
+    mode="review",
+    workdir=root,
+    prompt="Review this diff.",
+    slug="empty-response",
+    output_root=root / ".codex" / "ccg" / "gptpro",
+    round_number=1,
+    followup_session=None,
+    followup_reason=None,
+)
+server, url = module.start_server(session, open_browser=False)
+try:
+    data = json.dumps({"response": "   \\n\\t  "}).encode("utf-8")
+    req = urllib.request.Request(
+        url + "save-response",
+        data=data,
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    try:
+        urllib.request.urlopen(req, timeout=5)
+        print("EMPTY_STATUS=unexpected-success")
+    except urllib.error.HTTPError as error:
+        print("EMPTY_STATUS=" + str(error.code))
+        print("EMPTY_BODY=" + error.read().decode("utf-8"))
+    status = json.loads(session.status_file.read_text(encoding="utf-8"))
+    print("RESPONSE_TEXT=" + repr(session.response_file.read_text(encoding="utf-8")))
+    print("RESPONSE_SAVED=" + str(status["rounds"]["round-1"]["response_saved"]))
+finally:
+    server.shutdown()
+    server.server_close()
+`;
+  const result = run(python, ["-c", snippet, gptproBridge, dir]);
+  assert(result.stdout.includes("EMPTY_STATUS=400"), `expected empty response rejection:\n${result.stdout}`);
+  assert(
+    result.stdout.includes("Manual GPT Pro response cannot be empty."),
+    `expected empty response error:\n${result.stdout}`
+  );
+  assert(result.stdout.includes("RESPONSE_TEXT=''"), `expected response file to remain empty:\n${result.stdout}`);
+  assert(result.stdout.includes("RESPONSE_SAVED=False"), `expected response_saved to remain false:\n${result.stdout}`);
+});
+
+test("fixture:gptpro-bridge followup creates round-2 only and rejects round > 2", () => {
+  const dir = tempDir("ccg-gptpro-followup-");
+  const outputRoot = path.join(dir, ".codex", "ccg", "gptpro");
+  const first = run(python, [
+    gptproBridge,
+    "--mode",
+    "plan",
+    "--workdir",
+    dir,
+    "--prompt",
+    "Initial plan.",
+    "--slug",
+    "followup",
+    "--output-root",
+    outputRoot,
+    "--hold-seconds",
+    "0",
+  ]);
+  const sessionDir = first.stdout
+    .split(/\r?\n/)
+    .find((line) => line.startsWith("CCG_GPTPRO_SESSION_DIR="))
+    .split("=")
+    .slice(1)
+    .join("=");
+
+  run(python, [
+    gptproBridge,
+    "--mode",
+    "plan",
+    "--workdir",
+    dir,
+    "--prompt",
+    "Re-check blocker.",
+    "--output-root",
+    outputRoot,
+    "--round",
+    "2",
+    "--followup-session",
+    sessionDir,
+    "--followup-reason",
+    "blocker re-check",
+    "--hold-seconds",
+    "0",
+  ]);
+  assert(fs.existsSync(path.join(sessionDir, "round-2", "prompt.md")), "expected round-2 prompt");
+  assert(!fs.existsSync(path.join(sessionDir, "round-3")), "did not expect round-3");
+
+  const rejected = run(
+    python,
+    [
+      gptproBridge,
+      "--mode",
+      "plan",
+      "--workdir",
+      dir,
+      "--prompt",
+      "Third round.",
+      "--output-root",
+      outputRoot,
+      "--round",
+      "3",
+      "--followup-session",
+      sessionDir,
+    ],
+    { allowFailure: true }
+  );
+  assert(rejected.status !== 0, "expected round > 2 to be rejected");
+  assert((rejected.stderr + rejected.stdout).includes("Maximum manual questions: 2"), "expected budget error");
+});
+
+test("fixture:gptpro-bridge rejects round-2 without followup session", () => {
+  const dir = tempDir("ccg-gptpro-round2-no-followup-");
+  const outputRoot = path.join(dir, ".codex", "ccg", "gptpro");
+  const result = run(
+    python,
+    [
+      gptproBridge,
+      "--mode",
+      "plan",
+      "--workdir",
+      dir,
+      "--prompt",
+      "Second round without first round.",
+      "--slug",
+      "bad-round-two",
+      "--output-root",
+      outputRoot,
+      "--round",
+      "2",
+      "--hold-seconds",
+      "0",
+    ],
+    { allowFailure: true }
+  );
+  assert(result.status !== 0, "expected round 2 without followup session to fail");
+  assert(
+    (result.stderr + result.stdout).includes("Round 2 requires --followup-session"),
+    `expected round 2 followup error:\n${result.stdout}\n${result.stderr}`
+  );
+  assert(!fs.existsSync(outputRoot), "did not expect a new session root for invalid round 2");
+});
+
+test("fixture:gptpro commands, skills, templates, doctor, and bridge coverage exist", () => {
+  const ccgCommand = fs.readFileSync(path.join(repoRoot, "plugins", "ccg", "commands", "ccg.md"), "utf8");
+  const ccgSkill = fs.readFileSync(path.join(repoRoot, "plugins", "ccg", "skills", "ccg", "SKILL.md"), "utf8");
+  const readme = fs.readFileSync(path.join(repoRoot, "README.md"), "utf8");
+  const bridge = fs.readFileSync(path.join(repoRoot, "scripts", "install-codex-command-bridge.ps1"), "utf8");
+  const doctor = fs.readFileSync(pluginDoctor, "utf8");
+  const docs = fs.readFileSync(path.join(repoRoot, "docs", "gptpro-manual-bridge.md"), "utf8");
+
+  for (const command of ["gptpro-plan", "gptpro-review", "gptpro-exc"]) {
+    const commandText = fs.readFileSync(path.join(repoRoot, "plugins", "ccg", "commands", `${command}.md`), "utf8");
+    assert(commandText.includes(`ccg:${command}`), `expected ${command} command to route to its skill`);
+    assert(
+      fs.existsSync(path.join(repoRoot, "plugins", "ccg", "skills", `ccg-${command}`, "SKILL.md")),
+      `expected ccg-${command} skill`
+    );
+    assert(
+      fs.existsSync(path.join(repoRoot, "plugins", "ccg", "skills", `ccg-${command}`, "agents", "openai.yaml")),
+      `expected ccg-${command} agent`
+    );
+    assert(ccgCommand.includes(`/ccg:${command}`), `expected command index to include /ccg:${command}`);
+    assert(ccgSkill.includes(`/ccg:${command}`), `expected skill index to include /ccg:${command}`);
+    assert(readme.includes(`/ccg:${command}`), `expected README to include /ccg:${command}`);
+    assert(bridge.includes(`${command}.md`), `expected bridge installer to include ${command}.md`);
+    assert(
+      doctor.includes(`${command}.md`) || doctor.includes(`ccg-${command}`),
+      `expected doctor coverage for ${command}`
+    );
+  }
+
+  for (const skill of ["ccg-gptpro-plan", "ccg-gptpro-review", "ccg-gptpro-exc", "ccg-gptpro-bridge"]) {
+    const skillText = fs.readFileSync(path.join(repoRoot, "plugins", "ccg", "skills", skill, "SKILL.md"), "utf8");
+    assert(skillText.includes("Do not read ChatGPT web DOM"), `expected ${skill} to forbid DOM reading`);
+    assert(skillText.includes("Expected manual questions: 1"), `expected ${skill} to document expected budget`);
+    assert(skillText.includes("Maximum manual questions: 2"), `expected ${skill} to document maximum budget`);
+  }
+
+  for (const template of ["base", "plan", "review", "exc", "followup"]) {
+    assert(
+      fs.existsSync(
+        path.join(
+          repoRoot,
+          "plugins",
+          "ccg",
+          "skills",
+          "ccg-gptpro-bridge",
+          "templates",
+          "gptpro",
+          `${template}.md`
+        )
+      ),
+      `expected GPT Pro template: ${template}.md`
+    );
+  }
+  assert(docs.includes("No DOM extraction"), "expected docs to explain DOM boundary");
+  assert(doctor.includes("GPT Pro manual bridge"), "expected doctor summary");
 });
 
 test("CCG skills require browser preview for every workflow Gemini call", () => {

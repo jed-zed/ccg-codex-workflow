@@ -9,6 +9,9 @@ const repoRoot = path.resolve(__dirname, "..");
 const node = process.execPath;
 const phaseOneCommands = ["feat", "frontend", "backend", "analyze", "debug", "optimize", "test", "enhance"];
 const phaseOneCoreCommands = ["workflow", "plan", "execute", "codex-exec", "review", ...phaseOneCommands];
+const gptproCommands = ["gptpro-plan", "gptpro-review", "gptpro-exc"];
+const gptproSkills = ["ccg-gptpro-plan", "ccg-gptpro-review", "ccg-gptpro-exc", "ccg-gptpro-bridge"];
+const gptproTemplates = ["base", "plan", "review", "exc", "followup"];
 const geminiTemplates = [
   "base",
   "general",
@@ -156,6 +159,98 @@ function validateGeminiTemplates() {
     if (!executorSkill.includes(phrase)) fail(`ccg-executor skill is missing preview-helper rule: ${phrase}`);
   }
   console.log("gemini templates ok");
+}
+
+function validateGptProManualBridge() {
+  const requiredFiles = [
+    ...gptproCommands.map((command) => `plugins/ccg/commands/${command}.md`),
+    ...gptproSkills.map((skill) => `plugins/ccg/skills/${skill}/SKILL.md`),
+    ...gptproSkills.map((skill) => `plugins/ccg/skills/${skill}/agents/openai.yaml`),
+    "plugins/ccg/skills/ccg-gptpro-bridge/scripts/gptpro_bridge.py",
+    ...gptproTemplates.map(
+      (template) => `plugins/ccg/skills/ccg-gptpro-bridge/templates/gptpro/${template}.md`
+    ),
+    "docs/gptpro-manual-bridge.md",
+  ];
+  for (const file of requiredFiles) {
+    if (!fs.existsSync(path.join(repoRoot, file))) fail(`missing GPT Pro manual bridge file: ${file}`);
+  }
+
+  const boundaryFiles = [
+    "plugins/ccg/skills/ccg-gptpro-bridge/SKILL.md",
+    "plugins/ccg/skills/ccg-gptpro-plan/SKILL.md",
+    "plugins/ccg/skills/ccg-gptpro-review/SKILL.md",
+    "plugins/ccg/skills/ccg-gptpro-exc/SKILL.md",
+    "plugins/ccg/skills/ccg-gptpro-bridge/scripts/gptpro_bridge.py",
+    "docs/gptpro-manual-bridge.md",
+  ];
+  const boundaryCorpus = boundaryFiles
+    .map((file) => fs.readFileSync(path.join(repoRoot, file), "utf8"))
+    .join("\n");
+  for (const phrase of [
+    "Do not automate ChatGPT web login",
+    "Do not read ChatGPT web DOM",
+    "Do not extract ChatGPT Output programmatically",
+    "manual bridge",
+    "Codex remains final owner",
+    "Expected manual questions: 1",
+    "Maximum manual questions: 2",
+    "web_automation",
+    "dom_extraction",
+  ]) {
+    if (!boundaryCorpus.includes(phrase)) fail(`GPT Pro manual bridge is missing boundary phrase: ${phrase}`);
+  }
+
+  const script = fs.readFileSync(
+    path.join(repoRoot, "plugins/ccg/skills/ccg-gptpro-bridge/scripts/gptpro_bridge.py"),
+    "utf8"
+  );
+  for (const phrase of [
+    "ThreadingHTTPServer",
+    "GET /state",
+    "POST /save-response",
+    "POST /mark-copied",
+    "manual_questions_expected",
+    "manual_questions_max",
+    "webbrowser.open(\"https://chatgpt.com/\")",
+  ]) {
+    if (!script.includes(phrase)) fail(`gptpro_bridge.py is missing behavior phrase: ${phrase}`);
+  }
+
+  const ccgCommand = fs.readFileSync(path.join(repoRoot, "plugins/ccg/commands/ccg.md"), "utf8");
+  const ccgSkill = fs.readFileSync(path.join(repoRoot, "plugins/ccg/skills/ccg/SKILL.md"), "utf8");
+  const readme = fs.readFileSync(path.join(repoRoot, "README.md"), "utf8");
+  const bridge = fs.readFileSync(path.join(repoRoot, "scripts/install-codex-command-bridge.ps1"), "utf8");
+  const doctor = fs.readFileSync(path.join(repoRoot, "plugins/ccg/scripts/doctor.ps1"), "utf8");
+  const fixtures = fs.readFileSync(path.join(repoRoot, "scripts/run-fixture-tests.js"), "utf8");
+  const workflow = fs.readFileSync(path.join(repoRoot, ".github/workflows/ci.yml"), "utf8");
+
+  for (const command of gptproCommands) {
+    for (const [label, text, expected] of [
+      ["command index", ccgCommand, `/ccg:${command}`],
+      ["skill index", ccgSkill, `/ccg:${command}`],
+      ["README", readme, `/ccg:${command}`],
+      ["bridge installer", bridge, `${command}.md`],
+      ["doctor script", doctor, `${command}.md`],
+      ["fixture coverage", fixtures, `fixture:gptpro`],
+    ]) {
+      if (!text.includes(expected)) {
+        fail(`${label} missing GPT Pro manual bridge coverage for ${command}: ${expected}`);
+      }
+    }
+  }
+
+  for (const phrase of [
+    "GPT Pro manual bridge",
+    "ChatGPT web automation",
+    "intentionally unsupported",
+  ]) {
+    if (!doctor.includes(phrase)) fail(`doctor.ps1 is missing GPT Pro diagnostic phrase: ${phrase}`);
+  }
+  if (!workflow.includes("Compile GPT Pro manual bridge helper")) {
+    fail("CI workflow must compile GPT Pro manual bridge helper");
+  }
+  console.log("GPT Pro manual bridge ok");
 }
 
 function validateOriginalCcgParityPhaseOne() {
@@ -589,6 +684,7 @@ function main() {
   validateScripts();
   validateGeminiDefaults();
   validateGeminiTemplates();
+  validateGptProManualBridge();
   validateOriginalCcgParityPhaseOne();
   validatePlanLanguageContract();
   validateReleaseDocs();

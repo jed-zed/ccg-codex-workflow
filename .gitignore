@@ -14,3 +14,4 @@ build/
 .env
 .env.*
 !.env.example
+.codex/ccg/gptpro/

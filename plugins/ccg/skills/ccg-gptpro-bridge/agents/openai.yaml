@@ -1,0 +1,3 @@
+display_name: CCG GPT Pro Bridge
+short_description: Shared manual ChatGPT Pro bridge for CCG workflows.
+default_prompt: /ccg:gptpro-plan Add a manual second-opinion planning bridge

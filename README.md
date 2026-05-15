@@ -181,6 +181,9 @@ The plugin provides these prompt invocations and matching skills:
 /ccg:team-review
 /ccg:review
 /ccg:gemini-preview
+/ccg:gptpro-plan
+/ccg:gptpro-review
+/ccg:gptpro-exc
 /ccg:gen-docs
 /ccg:verify-change
 /ccg:verify-module
@@ -285,6 +288,28 @@ Ask Gemini for bounded help with a browser preview:
 
 Detached Gemini calls also open the browser preview automatically. If Windows blocks focus or popup behavior, use the printed `CCG_GEMINI_PREVIEW_URL`; successful launches print `CCG_GEMINI_BROWSER_OPENED=1`.
 
+## ChatGPT Pro Manual Bridge
+
+This plugin supports manual ChatGPT Pro second-opinion planning and review through:
+
+- `/ccg:gptpro-plan`
+- `/ccg:gptpro-review`
+- `/ccg:gptpro-exc`
+
+The bridge writes local prompt and response files under `.codex/ccg/gptpro/`. The user manually pastes the prompt into ChatGPT Pro and manually pastes the response back into the local bridge page or response file.
+
+The bridge intentionally does not automate ChatGPT web login, prompt submission, DOM reading, or output extraction.
+
+Manual question budget:
+
+| Command | Expected | Maximum | Round 2 only for |
+| --- | ---: | ---: | --- |
+| `/ccg:gptpro-plan` | 1 | 2 | blocker re-check or revised plan comparison |
+| `/ccg:gptpro-review` | 1 | 2 | blocker re-review after Codex fixes |
+| `/ccg:gptpro-exc` | 1 | 2 | preferably converted into review mode |
+
+这是人工桥接，不是 ChatGPT 网页自动化工具。
+
 Run quality gates:
 
 ```text
@@ -360,6 +385,7 @@ node .\scripts\validate-plugin.js --full-parity-surface
 node .\scripts\validate-plugin.js --full-parity-behavior
 node .\scripts\validate-plugin.js --full-parity
 python -m py_compile .\plugins\ccg\skills\ccg-executor\scripts\invoke_gemini_preview.py
+python -m py_compile .\plugins\ccg\skills\ccg-gptpro-bridge\scripts\gptpro_bridge.py
 node .\scripts\run-fixture-tests.js
 ```
 
