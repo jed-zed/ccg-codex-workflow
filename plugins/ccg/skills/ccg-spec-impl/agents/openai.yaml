@@ -1,0 +1,3 @@
+display_name: CCG Spec Impl
+short_description: Execute a CCG spec-backed plan.
+default_prompt: /ccg:spec-impl spec-name

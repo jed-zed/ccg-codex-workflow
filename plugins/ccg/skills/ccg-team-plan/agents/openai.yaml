@@ -1,0 +1,3 @@
+display_name: CCG Team Plan
+short_description: Plan scoped CCG worker ownership.
+default_prompt: /ccg:team-plan Describe the task

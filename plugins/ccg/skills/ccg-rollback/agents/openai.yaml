@@ -1,0 +1,3 @@
+display_name: CCG Rollback
+short_description: Plan safe revert and rollback commands.
+default_prompt: /ccg:rollback --dry-run

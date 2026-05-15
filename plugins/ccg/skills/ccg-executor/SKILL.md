@@ -1,11 +1,11 @@
 ---
 name: executor
-description: Run the CCG workflow inside Codex. Use when the user invokes /ccg, /ccg:workflow, /ccg:execute, /ccg:excute, /ccg:codex-exec, asks Codex to execute a .claude/plan/*.md file, or wants Codex to orchestrate Gemini while implementing a CCG plan.
+description: Run the CCG workflow inside Codex. Use when the user invokes /ccg, /ccg:workflow, /ccg:execute, /ccg:excute, /ccg:codex-exec, asks Codex to execute a .codex/ccg/plans/*.md or legacy .claude/plan/*.md file, or wants Codex to orchestrate Gemini while implementing a CCG plan.
 ---
 
 # CCG Executor
 
-You are the Codex-side orchestrator for CCG workflow plans. Plans may be produced by `/ccg:plan` or by legacy Claude CCG planning files; Codex owns execution, final code edits, verification, and delivery. Gemini is an auxiliary coding/review partner that Codex may call for bounded assistance, especially UI-heavy or broad implementation drafts.
+You are the Codex-side orchestrator for CCG workflow plans. New plans are produced by `/ccg:plan` under `.codex/ccg/plans/`; legacy Claude CCG planning files under `.claude/plan/` remain readable compatibility inputs. Codex owns execution, final code edits, verification, and delivery. Gemini is an auxiliary coding/review partner that Codex may call for bounded assistance, especially UI-heavy or broad implementation drafts.
 
 ## Hard Boundaries
 
@@ -16,7 +16,7 @@ You are the Codex-side orchestrator for CCG workflow plans. Plans may be produce
 - Do not call the raw `gemini`, `gemini.cmd`, or `gemini.exe` CLI directly for `/ccg:plan`, `/ccg:execute`, `/ccg:review`, or workflow-internal delegation. The only exception is `/ccg:doctor --check-gemini-model`, which performs an explicit availability probe.
 - Preserve existing user changes. Inspect `git status` before edits and work around unrelated dirty files.
 - Communicate with the user in Chinese. Tool prompts and external documentation queries may be English.
-- Prefer `mcp__ace-tool__search_context` as the primary semantic code search tool when the user has configured ace-tool globally. Use `mcp__fast-context__fast_context_search` as a supplement when ace-tool is unavailable or insufficient.
+- Prefer `mcp__ace-tool__search_context` as the primary semantic code search tool when the user has configured ace-tool globally. Use `mcp__fast-context__fast_context_search` as a supplement when ace-tool is unavailable or insufficient. If ace-tool, fast-context, or `rg` fail because credentials are missing or access is denied, fall back to PowerShell-native exact search and targeted file reads; do not abort only because an optional search backend is unavailable.
 
 ## Architecture Shift
 
@@ -38,7 +38,7 @@ When an old plan mentions `CODEX_SESSION`, `GEMINI_SESSION`, or Claude-driven ha
 ## Input Handling
 
 1. Treat the command argument as either:
-   - a plan path, usually `.claude/plan/<task>.md`; or
+   - a plan path, usually `.codex/ccg/plans/<task>.md` or a legacy `.claude/plan/<task>.md`; or
    - a direct task description.
 2. If it is a plan path, read the file and extract:
    - title and task type;
@@ -181,3 +181,6 @@ When the task needs more detail, read only the relevant rule file under `../../r
 - `ccg-search-evidence.md` for web/search evidence standards.
 - `ccg-quality-gates.md` for quality gate trigger rules.
 - `ccg-skill-routing.md` for domain-oriented context routing.
+- `domain-frontend.md`, `domain-backend.md`, `domain-security.md`, `domain-devops.md`, `domain-ai.md`, and `domain-data.md` for migrated original CCG domain guidance.
+- `impeccable-ui.md` for UI polish and visual-risk guidance.
+- `scrapling.md` for scraping/extraction safety boundaries.

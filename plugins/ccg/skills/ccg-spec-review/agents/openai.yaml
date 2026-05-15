@@ -1,0 +1,3 @@
+display_name: CCG Spec Review
+short_description: Review spec-backed CCG implementation consistency.
+default_prompt: /ccg:spec-review spec-name

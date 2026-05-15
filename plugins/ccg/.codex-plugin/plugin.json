@@ -1,7 +1,7 @@
 {
   "name": "ccg",
   "version": "0.2.0",
-  "description": "Codex-native CCG workflow planner, executor, and high-frequency command surface. Codex creates plans, orchestrates Gemini, applies code, verifies changes, and reports results.",
+  "description": "Codex-native CCG workflow planner, executor, Git/context, spec, team, and quality command surface. Codex creates Chinese plans, orchestrates Gemini, applies code, verifies changes, and reports results.",
   "author": {
     "name": "jed-zed",
     "email": "noreply@example.com",
@@ -23,7 +23,7 @@
   "interface": {
     "displayName": "CCG Codex Workflow",
     "shortDescription": "Run CCG workflows with Codex as executor and Gemini as helper",
-    "longDescription": "A Codex-native rewrite of the CCG workflow. Codex owns planning, implementation, and verification, while Gemini can be called through bounded standard prompt templates with a local browser preview for read-only planning analysis, frontend/UI help, backend architecture alternatives, debugging, optimization, tests, drafts, edge-case analysis, or review. Includes cache diagnostics, hardened snapshots, high-frequency CCG commands, and local quality/security gates.",
+    "longDescription": "A Codex-native rewrite of the CCG workflow. Codex owns planning, implementation, and verification, while Gemini can be called through bounded standard prompt templates with a local browser preview for read-only planning analysis, frontend/UI help, backend architecture alternatives, debugging, optimization, tests, drafts, edge-case analysis, or review. Includes cache diagnostics, hardened snapshots, high-frequency CCG commands, Git/context helpers, spec workflows, team workflows, and local quality/security gates. New plan artifacts are Chinese by default and live under .codex/ccg/plans/.",
     "developerName": "jed-zed",
     "category": "Coding",
     "capabilities": [
@@ -37,7 +37,7 @@
     "defaultPrompt": [
       "/ccg:doctor",
       "/ccg:plan Add the requested feature",
-      "/ccg:execute .claude/plan/task.md",
+      "/ccg:execute .codex/ccg/plans/task.md",
       "/ccg:feat Add the requested feature",
       "/ccg:frontend Improve this UI",
       "/ccg:backend Implement the backend task",

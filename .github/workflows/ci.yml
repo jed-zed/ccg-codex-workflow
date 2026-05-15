@@ -28,7 +28,7 @@ jobs:
           python-version: "3.11"
 
       - name: Validate plugin manifests and JavaScript
-        run: node scripts/validate-plugin.js
+        run: node scripts/validate-plugin.js --phase-one
 
       - name: Compile Gemini preview helper
         run: python -m py_compile plugins/ccg/skills/ccg-executor/scripts/invoke_gemini_preview.py

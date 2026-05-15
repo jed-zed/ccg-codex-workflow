@@ -1,0 +1,3 @@
+display_name: CCG Spec Research
+short_description: Research requirements into constraints.
+default_prompt: /ccg:spec-research Describe the requirement

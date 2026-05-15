@@ -1,0 +1,3 @@
+display_name: CCG Team Review
+short_description: Review CCG team outputs and verification.
+default_prompt: /ccg:team-review

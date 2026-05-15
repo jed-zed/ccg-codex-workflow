@@ -1,0 +1,3 @@
+display_name: CCG Team Exec
+short_description: Execute scoped CCG worker plans.
+default_prompt: /ccg:team-exec .codex/ccg/team/task/plan.md

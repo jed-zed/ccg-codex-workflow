@@ -8,7 +8,7 @@
   "plugins": [
     {
       "name": "ccg",
-      "description": "Codex-side CCG workflow planner, executor, and high-frequency command surface. Codex owns planning/execution and may use Gemini as a bounded helper.",
+      "description": "Codex-side CCG workflow planner, executor, Git/context, spec, team, and quality command surface. Codex owns planning/execution and may use Gemini as a bounded helper.",
       "version": "0.2.0",
       "source": "./plugins/ccg",
       "author": {

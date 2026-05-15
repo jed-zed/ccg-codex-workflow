@@ -1,0 +1,3 @@
+display_name: CCG Context
+short_description: Manage Codex-native CCG context history.
+default_prompt: /ccg:context history

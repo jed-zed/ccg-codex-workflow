@@ -1,0 +1,3 @@
+display_name: CCG Team Research
+short_description: Research a task for scoped worker ownership.
+default_prompt: /ccg:team-research Describe the task

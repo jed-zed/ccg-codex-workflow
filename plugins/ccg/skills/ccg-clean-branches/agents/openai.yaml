@@ -1,0 +1,3 @@
+display_name: CCG Clean Branches
+short_description: Dry-run cleanup of safely merged branches.
+default_prompt: /ccg:clean-branches

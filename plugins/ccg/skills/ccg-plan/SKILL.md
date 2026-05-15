@@ -1,15 +1,17 @@
 ---
 name: plan
-description: Create or revise a CCG implementation plan with Codex as planner and Gemini as a read-only analysis helper. Use when the user invokes /ccg:plan, asks to generate a .claude/plan/*.md CCG plan, asks to revise an existing CCG plan, or wants multi-model Codex+Gemini planning without modifying product code.
+description: Create or revise a CCG implementation plan with Codex as planner and Gemini as a read-only analysis helper. Use when the user invokes /ccg:plan, asks to generate a .codex/ccg/plans/*.md CCG plan, asks to revise an existing CCG plan, or wants multi-model Codex+Gemini planning without modifying product code.
 ---
 
 # CCG Plan
 
-Create decision-complete CCG plans for later `/ccg:execute`. This skill replaces the original Claude-led `/ccg:plan` with a Codex-native planner: Codex gathers context and writes the final plan; Gemini contributes read-only analysis from a disposable snapshot.
+Create decision-complete CCG plans for later `/ccg:execute`. This skill replaces the original Claude-led `/ccg:plan` with a Codex-native planner: Codex gathers context and writes the final plan under `.codex/ccg/plans/`; Gemini contributes read-only analysis from a disposable snapshot.
 
 ## Boundaries
 
-- Write only `.claude/plan/*.md`. Do not modify product code, tests, migrations, package files, or original Claude CCG plugin files.
+- Write new plans only to `.codex/ccg/plans/*.md`. Do not create new `.claude/plan/*.md` files.
+- Legacy `.claude/plan/*.md` files are read-compatible inputs. Revise a legacy `.claude/plan/*.md` file only when the user explicitly names that existing legacy file; mention in Chinese that it is a compatibility write.
+- Do not modify product code, tests, migrations, package files, or original Claude CCG plugin files.
 - Do not call `~/.claude/bin/codeagent-wrapper.exe` or any Claude-side execution wrapper.
 - Do not call `/ccg:execute` automatically and do not ask for a Y/N execution handoff.
 - If no user requirement is provided, answer in Chinese with usage examples and do not write files.
@@ -19,7 +21,14 @@ Create decision-complete CCG plans for later `/ccg:execute`. This skill replaces
 
 All `/ccg:plan` user-facing output must be Chinese by default. This includes empty-input usage/help, progress summaries, ambiguity questions, Gemini launch or failure reports, saved-plan summaries, and the final `/ccg:execute <plan-path>` handoff. English is allowed only for literal commands, file paths, code identifiers, generated English slugs, model names, environment variables, and raw Gemini excerpts that are clearly labeled as excerpts.
 
-Internal prompts to tools or Gemini may use English when that improves retrieval or technical precision, but Codex must translate the final planning interaction back into concise Chinese for the user.
+The generated plan file itself must also be Chinese by default. Hard requirement:
+
+- Use Chinese section headings, table headers, checklist labels, narrative text, risk descriptions, test strategy, and handoff explanation.
+- Keep English only for literal commands, file paths, code identifiers, model names, environment variables, generated slugs, URLs, and clearly labeled raw Gemini excerpts.
+- Do not write an English plan template and then summarize it in Chinese; the saved `.codex/ccg/plans/*.md` content is the final CCG planning output and must be Chinese.
+- If Gemini responds in English, synthesize it into Chinese before writing the final plan, while preserving short literal excerpts only when useful.
+
+Internal prompts to tools or Gemini may use English when that improves retrieval or technical precision, but Codex must translate the final planning interaction and the saved plan content back into concise Chinese for the user.
 
 ## Gemini gate
 
@@ -31,7 +40,7 @@ For any real plan creation or plan revision, Gemini participation is mandatory. 
 - a non-empty response read from that response file;
 - a final synthesis that includes both Codex analysis and Gemini analysis.
 
-If the Gemini helper cannot start, exits unsuccessfully, does not print `CCG_GEMINI_RESPONSE_FILE`, writes an empty response, or still fails after two retries, stop and report the failure in Chinese. In that case, do not write or present a final plan, do not create or edit `.claude/plan/*.md`, and do not emit a fake multi-model `<proposed_plan>`.
+If the Gemini helper cannot start, exits unsuccessfully, does not print `CCG_GEMINI_RESPONSE_FILE`, writes an empty response, or still fails after two retries, stop and report the failure in Chinese. In that case, do not write or present a final plan, do not create or edit `.codex/ccg/plans/*.md` or legacy `.claude/plan/*.md`, and do not emit a fake multi-model `<proposed_plan>`.
 
 This gate does not apply to empty-input usage/help responses.
 
@@ -48,7 +57,8 @@ This gate does not apply to empty-input usage/help responses.
 
 3. **Search project context**
    - Prefer `mcp__ace-tool__search_context` when available.
-   - Fall back to `rg`, `Glob`, `Grep`, and targeted file reads.
+   - Fall back to `mcp__fast-context__fast_context_search` if available, then `rg`, PowerShell-native search, `Glob`, `Grep`, and targeted file reads.
+   - If ace-tool, fast-context, or `rg` fail because credentials are missing or access is denied, continue with targeted reads and exact search instead of aborting.
    - Gather enough evidence to name key files, symbols, existing patterns, and verification commands. Do not invent paths.
 
 4. **Run Gemini read-only analysis**
@@ -66,118 +76,119 @@ This gate does not apply to empty-input usage/help responses.
    - Codex is authoritative for backend, data, architecture, repository patterns, and final sequencing.
    - Treat Gemini as a strong reference for frontend, UX, accessibility, integration risks, and missing test cases.
    - Record disagreements and the final tradeoff instead of hiding them.
+   - Translate or synthesize all Gemini findings into Chinese before saving the final plan.
 
 6. **Write the plan**
-   - Create `.claude/plan/` if missing.
+   - Create `.codex/ccg/plans/` if missing.
    - Generate an English kebab-case slug from the task name. If it cannot be inferred cleanly, use `ccg-plan`.
-   - For a new plan, choose `.claude/plan/<slug>.md`; if it exists, use `.claude/plan/<slug>-v2.md`, then `-v3`, etc.
-   - For an explicit revision request, write only the specified existing plan file.
-   - Show the full plan summary in Chinese after writing it, then stop. Do not continue into implementation.
+   - For a new plan, choose `.codex/ccg/plans/<slug>.md`; if it exists, use `.codex/ccg/plans/<slug>-v2.md`, then `-v3`, etc.
+   - For an explicit revision request, write only the specified existing plan file. If that file is under `.claude/plan/`, treat it as a legacy compatibility write and say so in Chinese.
+   - Ensure the saved plan content follows the Chinese plan template below. Then show the full plan summary in Chinese and stop. Do not continue into implementation.
 
 ## Plan Template
 
-Use this Markdown structure:
+Use this Chinese Markdown structure:
 
 ```markdown
-# CCG Plan: <task name>
+# CCG 计划：<任务名称>
 
-**Generated by**: Codex CCG Planner
-**Task type**: Backend / Frontend / Full-stack / Documentation / Refactor
-**Plan path**: `.claude/plan/<file>.md`
-**Gemini model**: `gemini-3.1-pro-preview`
-**Gemini preview**: `<CCG_GEMINI_PREVIEW_URL>; browser opened: <yes/no>`
-**Gemini response file**: `<CCG_GEMINI_RESPONSE_FILE>`
+**生成者**：Codex CCG Planner
+**任务类型**：后端 / 前端 / 全栈 / 文档 / 重构
+**计划路径**：`.codex/ccg/plans/<file>.md`
+**Gemini 模型**：`gemini-3.1-pro-preview`
+**Gemini 预览**：`<CCG_GEMINI_PREVIEW_URL>`；浏览器已打开：<是/否>
+**Gemini 响应文件**：`<CCG_GEMINI_RESPONSE_FILE>`
 
-## 1. Enhanced Requirement
+## 1. 增强需求
 
-### Goal
-<business or technical goal>
+### 目标
+<业务或技术目标>
 
-### In Scope
-- <included behavior>
+### 范围内
+- <包含的行为>
 
-### Out of Scope
-- <excluded behavior>
+### 不在范围内
+- <排除的行为>
 
-### Constraints
-- <technical or process constraint>
+### 约束
+- <技术或流程约束>
 
-### Acceptance Criteria
-- [ ] <observable criterion>
+### 验收标准
+- [ ] <可观察的验收条件>
 
-## 2. Context Evidence
+## 2. 上下文证据
 
-| Area | Evidence |
-|------|----------|
-| <module> | `<file-or-symbol>` - <what matters> |
+| 区域 | 证据 |
+|------|------|
+| <模块> | `<file-or-symbol>` - <关键点> |
 
-## 3. Multi-Model Analysis
+## 3. 多模型分析
 
-### Codex Analysis
-<architecture, backend/data implications, repository-pattern fit>
+### Codex 分析
+<架构、后端/数据影响、仓库模式适配>
 
-### Gemini Analysis
-<read-only helper findings from the response file>
+### Gemini 分析
+<从响应文件综合后的只读助手发现，用中文表述>
 
-### Disagreements and Final Decisions
-| Topic | Decision | Reason |
-|------|----------|--------|
+### 分歧与最终决策
+| 主题 | 决策 | 原因 |
+|------|------|------|
 
-## 4. WBS Implementation Steps
+## 4. WBS 实施步骤
 
-### Module A: <name> (<points> task points)
+### 模块 A：<名称>（<点数> 任务点）
 
-**Files**: `<path>`
+**文件**：`<path>`
 
-- [ ] **Task A.1**: <task> (<points> points)
-  - **Input**: <dependencies>
-  - **Output**: <deliverable>
-  - **Steps**:
-    1. <mechanical step>
-    2. <mechanical step>
+- [ ] **任务 A.1**：<任务>（<点数> 点）
+  - **输入**：<依赖>
+  - **输出**：<交付物>
+  - **步骤**：
+    1. <机械步骤>
+    2. <机械步骤>
 
-## 5. Key Files
+## 5. 关键文件
 
-| File | Action | Notes |
-|------|--------|-------|
-| `<path>` | Create / Modify / Verify | <why> |
+| 文件 | 动作 | 说明 |
+|------|------|------|
+| `<path>` | 新建 / 修改 / 验证 | <原因> |
 
-## 6. Test Strategy
+## 6. 测试策略
 
-- **Unit**: <focused tests>
-- **Integration**: <API/data-flow tests>
-- **E2E/Manual**: <critical user flow or manual check>
+- **单元测试**：<聚焦测试>
+- **集成测试**：<API/数据流测试>
+- **E2E/手工验证**：<关键用户流程或手工检查>
 
-## 7. Risks and Mitigations
+## 7. 风险与缓解
 
-| Risk | Mitigation |
-|------|------------|
+| 风险 | 缓解 |
+|------|------|
 
-## 8. Codex-Native Handoff
+## 8. Codex 原生交接
 
-Run manually after reviewing:
-
-```text
-/ccg:execute .claude/plan/<file>.md
-```
-
-Gemini model: `gemini-3.1-pro-preview`
-Gemini preview URL: `<url>`
-Gemini browser opened: `<yes-or-no>`
-Gemini response file: `<path>`
-```
-
-## Delivery Message
-
-After saving the plan, reply in Chinese:
-
-- State the saved path.
-- Summarize the chosen technical approach.
-- Mention whether Gemini participated and where its response file is.
-- Provide the exact manual command:
+审阅后手动运行：
 
 ```text
-/ccg:execute .claude/plan/<file>.md
+/ccg:execute .codex/ccg/plans/<file>.md
 ```
 
-Then stop. Do not ask whether to execute.
+Gemini 模型：`gemini-3.1-pro-preview`
+Gemini 预览 URL：`<url>`
+Gemini 浏览器已打开：<是/否>
+Gemini 响应文件：`<path>`
+```
+
+## 交付消息
+
+保存计划后，用中文回复：
+
+- 说明保存路径。
+- 概括选定的技术方案。
+- 说明 Gemini 是否参与，以及响应文件在哪里。
+- 提供准确的手动执行命令：
+
+```text
+/ccg:execute .codex/ccg/plans/<file>.md
+```
+
+然后停止。不要询问是否要继续执行。

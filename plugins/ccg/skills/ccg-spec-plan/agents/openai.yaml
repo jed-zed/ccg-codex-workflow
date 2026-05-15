@@ -1,0 +1,3 @@
+display_name: CCG Spec Plan
+short_description: Create a spec-backed CCG implementation plan.
+default_prompt: /ccg:spec-plan spec-name
