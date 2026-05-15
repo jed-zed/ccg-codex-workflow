@@ -22,7 +22,7 @@ const geminiTemplates = [
   "optimizer",
   "tester",
 ];
-const allowedArgs = new Set(["--phase-one", "--full-parity"]);
+const allowedArgs = new Set(["--phase-one", "--full-parity", "--full-parity-surface", "--full-parity-behavior"]);
 
 function fail(message) {
   throw new Error(message);
@@ -284,7 +284,7 @@ function commandName(command) {
   return command.replace(/^\/ccg:/, "");
 }
 
-function validateFullParity() {
+function validateFullParitySurface() {
   const rows = extractFullParityRows();
   if (!rows.length) fail("full parity matrix did not yield any command rows");
 
@@ -332,7 +332,115 @@ function validateFullParity() {
       fail(`full parity matrix missing phase-one/core command: /ccg:${command}`);
     }
   }
-  console.log(`original CCG full parity ok - ${requiredRows.length} required command(s)`);
+  console.log(`original CCG full parity surface ok - ${requiredRows.length} required command(s)`);
+}
+
+function validateFullParityBehavior() {
+  const requiredFiles = [
+    "plugins/ccg/skills/ccg-spec-init/scripts/spec_manager.js",
+    "plugins/ccg/skills/ccg-team/scripts/team_plan_checker.js",
+  ];
+  for (const file of requiredFiles) {
+    if (!fs.existsSync(path.join(repoRoot, file))) fail(`missing behavior helper: ${file}`);
+  }
+
+  const specManager = fs.readFileSync(
+    path.join(repoRoot, "plugins/ccg/skills/ccg-spec-init/scripts/spec_manager.js"),
+    "utf8"
+  );
+  for (const phrase of ["status.json", "write-research", "write-constraints", "validate", "archive"]) {
+    if (!specManager.includes(phrase)) fail(`spec_manager.js is missing behavior phrase: ${phrase}`);
+  }
+
+  const teamChecker = fs.readFileSync(
+    path.join(repoRoot, "plugins/ccg/skills/ccg-team/scripts/team_plan_checker.js"),
+    "utf8"
+  );
+  for (const phrase of ["same_file_conflicts", "can_execute", "blocking_reasons", "status.json"]) {
+    if (!teamChecker.includes(phrase)) fail(`team_plan_checker.js is missing behavior phrase: ${phrase}`);
+  }
+
+  const commitHelper = fs.readFileSync(
+    path.join(repoRoot, "plugins/ccg/skills/ccg-commit/scripts/commit_helper.js"),
+    "utf8"
+  );
+  for (const phrase of [
+    "--check-gates",
+    "--allow-gate-warnings",
+    "CCG_VERIFY_CHANGE_SCRIPT",
+    "CCG_VERIFY_QUALITY_SCRIPT",
+    "CCG_VERIFY_SECURITY_SCRIPT",
+    "verify-security",
+  ]) {
+    if (!commitHelper.includes(phrase)) fail(`commit_helper.js is missing behavior phrase: ${phrase}`);
+  }
+
+  const rollbackHelper = fs.readFileSync(
+    path.join(repoRoot, "plugins/ccg/skills/ccg-rollback/scripts/rollback_helper.js"),
+    "utf8"
+  );
+  for (const phrase of [
+    "--protected-branch-ok",
+    "git revert --no-commit",
+    "git restore --source=",
+    "git reset --hard remains manual-only",
+    "git push --force is always manual-only",
+  ]) {
+    if (!rollbackHelper.includes(phrase)) fail(`rollback_helper.js is missing behavior phrase: ${phrase}`);
+  }
+
+  const fixtures = fs.readFileSync(path.join(repoRoot, "scripts/run-fixture-tests.js"), "utf8");
+  for (const marker of [
+    "fixture:spec-manager",
+    "fixture:team-plan-checker",
+    "fixture:rollback-confirm-exec",
+    "fixture:commit-gate-runner",
+  ]) {
+    if (!fixtures.includes(marker)) fail(`run-fixture-tests.js is missing behavior fixture marker: ${marker}`);
+  }
+
+  const specDocs = fs.readFileSync(path.join(repoRoot, "docs/spec-workflow.md"), "utf8");
+  for (const phrase of ["status.json", "spec_manager.js", "validate <spec-name> --json"]) {
+    if (!specDocs.includes(phrase)) fail(`spec workflow docs are missing behavior phrase: ${phrase}`);
+  }
+
+  const teamDocs = fs.readFileSync(path.join(repoRoot, "docs/team-workflow.md"), "utf8");
+  for (const phrase of ["team_plan_checker.js", "status.json", "can_execute"]) {
+    if (!teamDocs.includes(phrase)) fail(`team workflow docs are missing behavior phrase: ${phrase}`);
+  }
+
+  const readme = fs.readFileSync(path.join(repoRoot, "README.md"), "utf8");
+  for (const phrase of [
+    "Behavior-depth parity:",
+    "spec_manager.js",
+    "team_plan_checker.js",
+    "Rollback supports confirmed non-destructive revert/restore execution.",
+    "Commit helper can collect CCG gate status before committing.",
+  ]) {
+    if (!readme.includes(phrase)) fail(`README is missing behavior parity phrase: ${phrase}`);
+  }
+
+  const matrix = fs.readFileSync(path.join(repoRoot, "docs/original-ccg-parity-matrix.md"), "utf8");
+  for (const phrase of ["## Behavioral Depth Coverage", "spec_manager.js", "team_plan_checker.js"]) {
+    if (!matrix.includes(phrase)) fail(`parity matrix is missing behavior coverage phrase: ${phrase}`);
+  }
+
+  const migration = fs.readFileSync(path.join(repoRoot, "docs/migration-from-claude-ccg.md"), "utf8");
+  for (const phrase of [
+    "spec_manager.js",
+    "team_plan_checker.js",
+    "safer Codex-native behavioral helpers",
+    "Claude wrapper, Claude Agent Teams runtime, and legacy `SESSION_ID` resume are still intentionally not restored",
+  ]) {
+    if (!migration.includes(phrase)) fail(`migration guide is missing behavior parity phrase: ${phrase}`);
+  }
+
+  console.log("original CCG full parity behavior ok");
+}
+
+function validateFullParity() {
+  validateFullParitySurface();
+  validateFullParityBehavior();
 }
 
 function validateReleaseDocs() {
@@ -353,12 +461,15 @@ function validateReleaseDocs() {
     "doctor cannot prove slash autocomplete",
     "Desktop autocomplete smoke test",
     "CLI slash autocomplete is not required to pass",
+    "Behavior-depth parity:",
+    "spec_manager.js",
+    "team_plan_checker.js",
   ]) {
     if (!readme.includes(phrase)) fail(`README is missing release-readiness phrase: ${phrase}`);
   }
 
   const parityMatrix = fs.readFileSync(path.join(repoRoot, "docs/original-ccg-parity-matrix.md"), "utf8");
-  for (const phrase of ["Slash autocomplete is verified in Codex Desktop", "Codex CLI 0.130/TUI"]) {
+  for (const phrase of ["Slash autocomplete is verified in Codex Desktop", "Codex CLI 0.130/TUI", "Behavioral Depth Coverage"]) {
     if (!parityMatrix.includes(phrase)) fail(`parity matrix is missing autocomplete phrase: ${phrase}`);
   }
 
@@ -418,6 +529,15 @@ function validateCiActions() {
   for (const action of ["actions/checkout@v4", "actions/setup-node@v4", "actions/setup-python@v5"]) {
     if (workflow.includes(action)) fail(`CI workflow still uses Node 20-backed action: ${action}`);
   }
+  for (const phrase of [
+    "Validate phase-one compatibility",
+    "Validate full parity surface",
+    "Validate full parity behavior",
+    "node scripts/validate-plugin.js --full-parity-surface",
+    "node scripts/validate-plugin.js --full-parity-behavior",
+  ]) {
+    if (!workflow.includes(phrase)) fail(`CI workflow must include behavior parity phrase: ${phrase}`);
+  }
   console.log("ci actions ok");
 }
 
@@ -454,6 +574,8 @@ function main() {
     if (!allowedArgs.has(arg)) fail(`unknown argument: ${arg}`);
   }
   const fullParity = process.argv.includes("--full-parity");
+  const fullParitySurface = process.argv.includes("--full-parity-surface");
+  const fullParityBehavior = process.argv.includes("--full-parity-behavior");
   validateJson();
   validateScripts();
   validateGeminiDefaults();
@@ -466,6 +588,10 @@ function main() {
   validateSkills();
   nodeCheck();
   if (fullParity) validateFullParity();
+  else {
+    if (fullParitySurface) validateFullParitySurface();
+    if (fullParityBehavior) validateFullParityBehavior();
+  }
 }
 
 main();

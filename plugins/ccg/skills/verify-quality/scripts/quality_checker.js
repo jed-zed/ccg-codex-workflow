@@ -802,6 +802,24 @@ function analyzePythonFile(filePath) {
 
 // --- Directory scan ---
 
+function analyzeResolvedFile(full) {
+  const ext = path.extname(full).toLowerCase();
+  if (!CODE_EXTENSIONS.has(ext)) {
+    return {
+      metrics: {
+        path: full, lines: 0, code_lines: 0, comment_lines: 0,
+        blank_lines: 0, functions: 0, classes: 0,
+        max_complexity: 0, avg_function_length: 0,
+      },
+      issues: [],
+      skipped: true,
+    };
+  }
+  if (ext === '.py') return analyzePythonFile(full);
+  if (JSTS_EXTENSIONS.has(ext)) return analyzeJSTSFile(full);
+  return analyzeGenericFile(full);
+}
+
 function scanDirectory(scanPath, excludeDirs) {
   const resolved = path.resolve(scanPath);
   const exclude = excludeDirs || EXCLUDE_DIRS;
@@ -810,6 +828,25 @@ function scanDirectory(scanPath, excludeDirs) {
     total_lines: 0, total_code_lines: 0,
     issues: [], file_metrics: [],
   };
+
+  let stat;
+  try {
+    stat = fs.statSync(resolved);
+  } catch {
+    return result;
+  }
+
+  if (stat.isFile()) {
+    const analysis = analyzeResolvedFile(resolved);
+    if (!analysis.skipped) {
+      result.files_scanned++;
+      result.file_metrics.push(analysis.metrics);
+      result.issues.push(...analysis.issues);
+      result.total_lines += analysis.metrics.lines;
+      result.total_code_lines += analysis.metrics.code_lines;
+    }
+    return result;
+  }
 
   function walk(dir) {
     let entries;
@@ -821,12 +858,8 @@ function scanDirectory(scanPath, excludeDirs) {
       const ext = path.extname(entry.name).toLowerCase();
       if (!CODE_EXTENSIONS.has(ext)) continue;
 
+      const { metrics, issues } = analyzeResolvedFile(full);
       result.files_scanned++;
-      const { metrics, issues } = ext === '.py'
-        ? analyzePythonFile(full)
-        : JSTS_EXTENSIONS.has(ext)
-          ? analyzeJSTSFile(full)
-          : analyzeGenericFile(full);
       result.file_metrics.push(metrics);
       result.issues.push(...issues);
       result.total_lines += metrics.lines;

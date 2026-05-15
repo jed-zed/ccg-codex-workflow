@@ -14,4 +14,4 @@ The user invoked:
 
 Use the installed CCG plugin skill `ccg:spec-research`.
 
-Write research and constraints under `.codex/ccg/specs/<name>/`.
+Write research and constraints under `.codex/ccg/specs/<name>/`, then validate the spec lifecycle with `spec_manager.js`.

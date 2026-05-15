@@ -134,9 +134,16 @@ Legacy `.claude/plan/*.md`, `CLAUDE.md`, `.context/**`, and `openspec/**` files 
 
 ### Original CCG Parity Status
 
-The original CCG workflow exposes a broader 29+ command surface. This Codex-native plugin now implements the core planner/executor/review/doctor gates, the high-frequency parity group, Git/context helpers, OPSX/spec commands, and Codex-native team workflow commands. Full original CCG command-surface parity is achieved; behavioral parity is implemented as safer Codex-native adaptations rather than behavior-for-behavior copies. Full parity release language still requires local validation and a real green GitHub Actions run on Ubuntu and Windows.
+The original CCG workflow exposes a broader 29+ command surface. This Codex-native plugin now implements the core planner/executor/review/doctor gates, the high-frequency parity group, Git/context helpers, OPSX/spec commands, and Codex-native team workflow commands. Full original CCG command-surface parity is achieved, and behavior-depth parity is implemented through safer Codex-native helpers instead of behavior-for-behavior copies.
 
 The detailed tracking table lives in `docs/original-ccg-parity-matrix.md`. Domain skills, Impeccable UI, and Scrapling safety guidance are migrated as Codex rules. Claude wrapper behavior and legacy `SESSION_ID` resume are intentionally not copied.
+
+Behavior-depth parity:
+
+- Spec artifacts are managed by `spec_manager.js`.
+- Team plans are parsed and conflict-checked with `team_plan_checker.js` before execution.
+- Rollback supports confirmed non-destructive revert/restore execution.
+- Commit helper can collect CCG gate status before committing.
 
 The plugin provides these prompt invocations and matching skills:
 
@@ -349,6 +356,8 @@ Use `--direct-workdir` only when you explicitly want Gemini to run against the r
 
 ```powershell
 node .\scripts\validate-plugin.js --phase-one
+node .\scripts\validate-plugin.js --full-parity-surface
+node .\scripts\validate-plugin.js --full-parity-behavior
 node .\scripts\validate-plugin.js --full-parity
 python -m py_compile .\plugins\ccg\skills\ccg-executor\scripts\invoke_gemini_preview.py
 node .\scripts\run-fixture-tests.js

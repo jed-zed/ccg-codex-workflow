@@ -12,6 +12,12 @@ Create a zero-decision implementation plan from `.codex/ccg/specs/<name>/constra
 - `.codex/ccg/specs/<name>/plan.md`
 - `.codex/ccg/plans/<name>.md` when a standalone execution plan is useful
 
+## Required Helper Flow
+
+- Run `../ccg-spec-init/scripts/spec_manager.js validate <name> --json` before planning.
+- Refuse to generate the plan when `constraints.md` is missing or validation is not clean.
+- After writing `.codex/ccg/specs/<name>/plan.md`, keep the spec lifecycle aligned with `status.json`.
+
 ## Required Plan Content
 
 - 验收标准
