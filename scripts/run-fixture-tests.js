@@ -1546,6 +1546,7 @@ test("fixture:rollback-confirm-exec refuses push --force always", () => {
 
 test("fixture:rollback-confirm-exec protected branch requires --protected-branch-ok", () => {
   const dir = initGitRepo();
+  run("git", ["branch", "-M", "main"], { cwd: dir });
   writeFile(path.join(dir, "src", "app.js"), "console.log('updated');\n");
   run("git", ["add", "src/app.js"], { cwd: dir });
   run("git", ["commit", "-m", "update"], { cwd: dir });
@@ -1560,6 +1561,26 @@ test("fixture:rollback-confirm-exec protected branch requires --protected-branch
     String(json.reason || "").includes("protected branch"),
     "expected protected branch reason in JSON output"
   );
+});
+
+test("fixture:rollback-confirm-exec refuses --branch mismatch with current branch", () => {
+  const dir = initGitRepo();
+  writeFile(path.join(dir, "src", "app.js"), "console.log('updated');\n");
+  run("git", ["add", "src/app.js"], { cwd: dir });
+  run("git", ["commit", "-m", "update"], { cwd: dir });
+  const sha = run("git", ["rev-parse", "HEAD"], { cwd: dir }).stdout.trim();
+  const current = run("git", ["branch", "--show-current"], { cwd: dir }).stdout.trim();
+  const result = run(
+    node,
+    [rollbackHelper, "--target", sha, "--mode", "revert", "--branch", `${current}-other`, "--confirm", "--json"],
+    { cwd: dir, allowFailure: true }
+  );
+  const json = parseJsonOutput(result);
+  assert(result.status !== 0, "expected branch mismatch guard to fail");
+  assert(json.blocked === true, "expected branch mismatch to be a blocked rollback");
+  assert(String(json.reason || "").includes("branch mismatch"), "expected branch mismatch reason in JSON output");
+  const cached = run("git", ["diff", "--cached", "--name-only"], { cwd: dir }).stdout.trim();
+  assert(cached === "", "expected branch mismatch guard to avoid staged rollback changes");
 });
 
 test("fixture:commit-gate-runner detects staged, unstaged, and untracked files", () => {
@@ -1724,6 +1745,51 @@ test("fixture:commit-gate-runner refuses --execute when gate fails", () => {
   const json = parseJsonOutput(result);
   assert(result.status !== 0, "expected execute refusal when a gate fails");
   assert(json.canCommit === false, "expected canCommit=false when a gate fails");
+});
+
+test("fixture:commit-gate-runner --allow-gate-warnings does not bypass failed gates", () => {
+  const dir = initGitRepo();
+  const fakeChange = createFakeGateScript(
+    path.join(dir, "fake-change.js"),
+    {
+      passed: true,
+      total_additions: 1,
+      total_deletions: 0,
+      affected_modules: ["src"],
+      changes: [],
+      issues: [],
+    }
+  );
+  const fakeQuality = createFakeGateScript(
+    path.join(dir, "fake-quality.js"),
+    {
+      scan_path: ".",
+      files_scanned: 1,
+      total_lines: 1,
+      total_code_lines: 1,
+      passed: false,
+      error_count: 1,
+      warning_count: 1,
+      file_metrics: [],
+      issues: [{ severity: "error", message: "blocked" }],
+    },
+    1
+  );
+  writeFile(path.join(dir, "src", "app.js"), "console.log('blocked with warning flag');\n");
+  run("git", ["add", "src/app.js"], { cwd: dir });
+  const result = run(node, [commitHelper, "--execute", "--allow-gate-warnings", "--json"], {
+    cwd: dir,
+    allowFailure: true,
+    env: {
+      CCG_VERIFY_CHANGE_SCRIPT: fakeChange,
+      CCG_VERIFY_QUALITY_SCRIPT: fakeQuality,
+    },
+  });
+  const json = parseJsonOutput(result);
+  const commitCount = Number(run("git", ["rev-list", "--count", "HEAD"], { cwd: dir }).stdout.trim());
+  assert(result.status !== 0, "expected failed gate to block despite --allow-gate-warnings");
+  assert(json.canCommit === false, "expected canCommit=false when a gate fails despite warning allowance");
+  assert(commitCount === 1, `expected no commit after failed gate, got ${commitCount}`);
 });
 
 test("fixture:commit-gate-runner executes when staged files and gates pass", () => {

@@ -22,7 +22,7 @@ git commit -m "<message>"
 
 - Execute the commit only when the user explicitly says to commit directly.
 - Refuse `--execute` / `--confirm` when no staged files exist.
-- Refuse `--execute` / `--confirm` when gates fail, unless the user explicitly accepts `--allow-gate-warnings`.
+- Refuse `--execute` / `--confirm` when gates fail; `--allow-gate-warnings` can continue only when gates produced warnings but no failures.
 
 ## Helper
 

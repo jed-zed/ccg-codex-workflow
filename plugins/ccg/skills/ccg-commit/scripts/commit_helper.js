@@ -244,7 +244,7 @@ function runGates(result, cwd = process.cwd()) {
     .map(([name, gate]) => `${name}: ${gate.warnings} warning(s)`);
   return {
     gates,
-    gates_passed: gateFailures.length === 0,
+    gates_passed: gateFailures.length === 0 && gateWarnings.length === 0,
     gate_failures: gateFailures,
     gate_warnings: gateWarnings,
   };
@@ -283,7 +283,11 @@ function main(argv = process.argv.slice(2), cwd = process.cwd()) {
 
   if (checkGates) {
     Object.assign(result, runGates(result, cwd));
-    result.canCommit = result.staged.length > 0 && (result.gates_passed || allowGateWarnings);
+    const hasGateFailures = result.gate_failures.length > 0;
+    const hasOnlyGateWarnings = result.gate_warnings.length > 0 && !hasGateFailures;
+    result.canCommit =
+      result.staged.length > 0 &&
+      (result.gates_passed || (allowGateWarnings && hasOnlyGateWarnings));
   }
 
   if (requireStaged && !result.staged.length) {

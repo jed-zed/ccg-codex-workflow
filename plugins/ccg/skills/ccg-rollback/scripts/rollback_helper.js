@@ -88,7 +88,9 @@ function plan(argv = process.argv.slice(2), cwd = process.cwd()) {
   const compatibilityMode = parseCompatibilityMode(args);
   const mode = explicitMode || compatibilityMode || (file ? "restore" : "revert");
   const depth = Math.max(1, Number(getFlagValue(args, "--depth") || 1));
-  const branch = getFlagValue(args, "--branch") || currentBranch(cwd);
+  const explicitBranch = getFlagValue(args, "--branch");
+  const actualBranch = currentBranch(cwd);
+  const branch = explicitBranch || actualBranch;
   const target =
     getFlagValue(args, "--target") ||
     args.find((arg) => /^[0-9a-f]{7,40}$/i.test(arg)) ||
@@ -122,6 +124,22 @@ function plan(argv = process.argv.slice(2), cwd = process.cwd()) {
 
   if (!["revert", "restore", "reset"].includes(mode)) {
     throw new CliError(`unsupported rollback mode: ${mode}`);
+  }
+
+  if (confirm && explicitBranch && explicitBranch !== actualBranch) {
+    throw new CliError(
+      `refusing to rollback branch ${explicitBranch} while current branch is ${actualBranch || "detached HEAD"}`,
+      buildResult({
+        dryRun: true,
+        blocked: true,
+        mode,
+        target,
+        branch,
+        file,
+        commands: [],
+        reason: `branch mismatch: current branch is ${actualBranch || "detached HEAD"}`,
+      })
+    );
   }
 
   if (confirm && isProtectedBranch(branch) && !protectedBranchOk) {
