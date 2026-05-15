@@ -67,8 +67,8 @@ The original project is Claude-led: Claude Code orchestrates Codex and Gemini. T
 | `/ccg:enhance` | done | `/ccg:enhance` | Scoped enhancement of existing behavior. |
 | `/ccg:init` | done | `/ccg:init` | Project CCG initialization under `.codex/ccg/**` without overwriting local instructions. |
 | `/ccg:context` | done | `/ccg:context` | Codex-native context log/summarize/history workflow. |
-| `/ccg:commit` | done | `/ccg:commit` | Safe commit helper; runs gates and asks before commit. |
-| `/ccg:rollback` | done | `/ccg:rollback` | Safe revert/reset planning; destructive actions require explicit confirmation. |
+| `/ccg:commit` | done | `/ccg:commit` | Safe commit planning/helper replacement; recommends gates and asks before commit. |
+| `/ccg:rollback` | done | `/ccg:rollback` | Safe revert/restore planning replacement; destructive actions require explicit confirmation. |
 | `/ccg:clean-branches` | done | `/ccg:clean-branches` | Dry-run first; protect main/current/unmerged branches. |
 | `/ccg:worktree` | done | `/ccg:worktree` | Codex branch/worktree helper with safe paths. |
 | `/ccg:spec-init` | done | `/ccg:spec-init` | OPSX/spec initialization adapted to `.codex/ccg/specs/**`. |
@@ -107,6 +107,7 @@ The original project is Claude-led: Claude Code orchestrates Codex and Gemini. T
 ## Acceptance Notes
 
 - A command is not considered parity-complete until it has a command file, skill, `agents/openai.yaml`, command index entry, bridge coverage, README mention, doctor diagnostic coverage, and fixture/validation coverage.
+- This matrix claims full original CCG command-surface parity. Behavioral parity is implemented as safer Codex-native artifact workflows rather than behavior-for-behavior copies of Claude, OPSX, or Agent Teams runtime behavior; spec, team, and rollback depth can still be strengthened in follow-up work.
 - Slash autocomplete is verified in Codex Desktop after plugin cache sync and session restart. Codex CLI 0.130/TUI still requires prompt-text invocation as the supported fallback when autocomplete is absent.
 - Gemini helper calls must open the browser preview automatically unless the user explicitly asks for headless execution.
 - Full parity release language still requires local validation and a real green GitHub Actions run on Ubuntu and Windows.

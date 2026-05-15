@@ -134,7 +134,7 @@ Legacy `.claude/plan/*.md`, `CLAUDE.md`, `.context/**`, and `openspec/**` files 
 
 ### Original CCG Parity Status
 
-The original CCG workflow exposes a broader 29+ command surface. This Codex-native plugin now implements the core planner/executor/review/doctor gates, the high-frequency parity group, Git/context helpers, OPSX/spec commands, and Codex-native team workflow commands. Full parity release language still requires local validation and a real green GitHub Actions run on Ubuntu and Windows.
+The original CCG workflow exposes a broader 29+ command surface. This Codex-native plugin now implements the core planner/executor/review/doctor gates, the high-frequency parity group, Git/context helpers, OPSX/spec commands, and Codex-native team workflow commands. Full original CCG command-surface parity is achieved; behavioral parity is implemented as safer Codex-native adaptations rather than behavior-for-behavior copies. Full parity release language still requires local validation and a real green GitHub Actions run on Ubuntu and Windows.
 
 The detailed tracking table lives in `docs/original-ccg-parity-matrix.md`. Domain skills, Impeccable UI, and Scrapling safety guidance are migrated as Codex rules. Claude wrapper behavior and legacy `SESSION_ID` resume are intentionally not copied.
 
