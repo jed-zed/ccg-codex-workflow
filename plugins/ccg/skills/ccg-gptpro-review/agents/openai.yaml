@@ -1,0 +1,3 @@
+display_name: CCG GPT Pro Review
+short_description: Create a manual ChatGPT Pro review second-opinion bridge.
+default_prompt: /ccg:gptpro-review

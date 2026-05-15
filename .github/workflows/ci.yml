@@ -39,5 +39,8 @@ jobs:
       - name: Compile Gemini preview helper
         run: python -m py_compile plugins/ccg/skills/ccg-executor/scripts/invoke_gemini_preview.py
 
+      - name: Compile GPT Pro manual bridge helper
+        run: python -m py_compile plugins/ccg/skills/ccg-gptpro-bridge/scripts/gptpro_bridge.py
+
       - name: Run fixture tests
         run: node scripts/run-fixture-tests.js

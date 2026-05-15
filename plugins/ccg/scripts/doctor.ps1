@@ -344,6 +344,9 @@ foreach ($commandName in @(
   "team-review.md",
   "doctor.md",
   "gemini-preview.md",
+  "gptpro-plan.md",
+  "gptpro-review.md",
+  "gptpro-exc.md",
   "verify-change.md"
 )) {
   $commandPath = Join-Path $commandsDir $commandName
@@ -383,11 +386,38 @@ foreach ($skillName in @(
   "ccg-team-review",
   "ccg-doctor",
   "ccg-gemini-preview",
+  "ccg-gptpro-plan",
+  "ccg-gptpro-review",
+  "ccg-gptpro-exc",
+  "ccg-gptpro-bridge",
   "verify-change"
 )) {
   $skillPath = Join-PathMany $skillsDir $skillName "SKILL.md"
   Test-PathExists "plugin skill: $skillName" $skillPath "Restore or reinstall the CCG plugin skills." | Out-Null
 }
+
+$gptproRequiredPaths = @(
+  (Join-PathMany $commandsDir "gptpro-plan.md"),
+  (Join-PathMany $commandsDir "gptpro-review.md"),
+  (Join-PathMany $commandsDir "gptpro-exc.md"),
+  (Join-PathMany $skillsDir "ccg-gptpro-plan" "SKILL.md"),
+  (Join-PathMany $skillsDir "ccg-gptpro-review" "SKILL.md"),
+  (Join-PathMany $skillsDir "ccg-gptpro-exc" "SKILL.md"),
+  (Join-PathMany $skillsDir "ccg-gptpro-bridge" "SKILL.md"),
+  (Join-PathMany $skillsDir "ccg-gptpro-bridge" "scripts" "gptpro_bridge.py"),
+  (Join-PathMany $skillsDir "ccg-gptpro-bridge" "templates" "gptpro" "base.md"),
+  (Join-PathMany $skillsDir "ccg-gptpro-bridge" "templates" "gptpro" "plan.md"),
+  (Join-PathMany $skillsDir "ccg-gptpro-bridge" "templates" "gptpro" "review.md"),
+  (Join-PathMany $skillsDir "ccg-gptpro-bridge" "templates" "gptpro" "exc.md"),
+  (Join-PathMany $skillsDir "ccg-gptpro-bridge" "templates" "gptpro" "followup.md")
+)
+$gptproMissing = @($gptproRequiredPaths | Where-Object { -not (Test-Path -LiteralPath $_) })
+if ($gptproMissing.Count -eq 0) {
+  Add-Check "GPT Pro manual bridge" "PASS" "Required command, skill, script, and template files are present."
+} else {
+  Add-Check "GPT Pro manual bridge" "FAIL" ("Missing: " + ($gptproMissing -join "; ")) "Restore the GPT Pro manual bridge files."
+}
+Add-Check "ChatGPT web automation" "PASS" "intentionally unsupported"
 
 if ($pluginManifest -and $pluginManifest.version) {
   $cacheRoot = Join-PathMany $CodexHome "plugins" "cache" "ccg-codex-workflow" "ccg" "$($pluginManifest.version)"
@@ -436,6 +466,9 @@ if (Test-Path -LiteralPath $cacheRoot) {
     "commands\team-review.md",
     "commands\review.md",
     "commands\doctor.md",
+    "commands\gptpro-plan.md",
+    "commands\gptpro-review.md",
+    "commands\gptpro-exc.md",
     "skills\ccg-plan\SKILL.md",
     "skills\ccg-execute\SKILL.md",
     "skills\ccg-excute\SKILL.md",
@@ -462,6 +495,16 @@ if (Test-Path -LiteralPath $cacheRoot) {
     "skills\ccg-team-review\SKILL.md",
     "skills\ccg-review\SKILL.md",
     "skills\ccg-doctor\SKILL.md",
+    "skills\ccg-gptpro-plan\SKILL.md",
+    "skills\ccg-gptpro-review\SKILL.md",
+    "skills\ccg-gptpro-exc\SKILL.md",
+    "skills\ccg-gptpro-bridge\SKILL.md",
+    "skills\ccg-gptpro-bridge\scripts\gptpro_bridge.py",
+    "skills\ccg-gptpro-bridge\templates\gptpro\base.md",
+    "skills\ccg-gptpro-bridge\templates\gptpro\plan.md",
+    "skills\ccg-gptpro-bridge\templates\gptpro\review.md",
+    "skills\ccg-gptpro-bridge\templates\gptpro\exc.md",
+    "skills\ccg-gptpro-bridge\templates\gptpro\followup.md",
     "skills\ccg-executor\scripts\invoke_gemini_preview.py",
     "scripts\doctor.ps1"
   )) {
@@ -501,6 +544,10 @@ if (Test-Path -LiteralPath $cacheRoot) {
     "ccg-team-review",
     "ccg-doctor",
     "ccg-gemini-preview",
+    "ccg-gptpro-plan",
+    "ccg-gptpro-review",
+    "ccg-gptpro-exc",
+    "ccg-gptpro-bridge",
     "verify-change"
   )) {
     $cachedSkill = Join-PathMany $cacheRoot "skills" $skillName "SKILL.md"
@@ -568,6 +615,9 @@ foreach ($skill in @(
   "ccg:team-review",
   "ccg:doctor",
   "ccg:gemini-preview",
+  "ccg:gptpro-plan",
+  "ccg:gptpro-review",
+  "ccg:gptpro-exc",
   "ccg:verify-change"
 )) {
   Test-PromptSkill $skill $promptInputOutput
@@ -626,6 +676,9 @@ Test-BridgeFile "ccg\team-exec.md" (Join-Path $bridgeCommandDir "team-exec.md")
 Test-BridgeFile "ccg\team-review.md" (Join-Path $bridgeCommandDir "team-review.md")
 Test-BridgeFile "ccg\doctor.md" (Join-Path $bridgeCommandDir "doctor.md")
 Test-BridgeFile "ccg\gemini-preview.md" (Join-Path $bridgeCommandDir "gemini-preview.md")
+Test-BridgeFile "ccg\gptpro-plan.md" (Join-Path $bridgeCommandDir "gptpro-plan.md")
+Test-BridgeFile "ccg\gptpro-review.md" (Join-Path $bridgeCommandDir "gptpro-review.md")
+Test-BridgeFile "ccg\gptpro-exc.md" (Join-Path $bridgeCommandDir "gptpro-exc.md")
 
 if ([string]::IsNullOrWhiteSpace($GeminiModel)) {
   if ([string]::IsNullOrWhiteSpace($env:GEMINI_MODEL)) {

@@ -1,0 +1,3 @@
+display_name: CCG GPT Pro Execution Companion
+short_description: Create a manual ChatGPT Pro execution-companion bridge.
+default_prompt: /ccg:gptpro-exc Implement the planned change
