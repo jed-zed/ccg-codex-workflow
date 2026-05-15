@@ -9,6 +9,8 @@ Review spec-driven work for consistency and scope control.
 
 ## Checks
 
+- Run `../ccg-spec-init/scripts/spec_manager.js validate <name> --json` before review.
+- Require both constraints and plan artifacts before treating the spec as reviewable.
 - Implemented behavior matches constraints.
 - Tests map to acceptance criteria.
 - No out-of-scope behavior was added.

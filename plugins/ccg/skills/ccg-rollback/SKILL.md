@@ -9,11 +9,15 @@ Plan rollback actions conservatively.
 
 ## Behavior
 
-- Support `--last`, `<commit>`, `--file <path>`, and `--dry-run`.
+- Support `--last`, `--target <rev>`, `--branch <branch>`, `--file <path>`, `--mode revert|restore|reset`, `--depth <n>`, and `--dry-run`.
 - Default to dry-run previews such as:
   - `git revert --no-commit <sha>`
   - `git restore --source=<sha> -- <file>`
-- Do not run `git reset --hard`, `git clean -fd`, or `git push --force` unless the user explicitly asks and confirms the destructive action.
+- Non-destructive `revert` and `restore` may execute only after explicit confirmation.
+- If `--branch <branch>` is provided for a confirmed rollback, the helper must verify the current branch matches it and refuse cross-branch execution.
+- `git reset --hard` remains manual-only even with confirmation.
+- `git clean -fd`, `git push --force`, and `git push -f` remain blocked/manual-only.
+- Protected branches such as `main`, `master`, `production`, and `release` require `--protected-branch-ok` before executing a non-destructive rollback.
 - Preserve unrelated worktree changes.
 
 ## Helper

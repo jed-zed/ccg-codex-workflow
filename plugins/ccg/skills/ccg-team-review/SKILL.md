@@ -9,6 +9,8 @@ Review team results before delivery.
 
 ## Checks
 
+- Require `.codex/ccg/team/<task>/status.json` or `plan.md` evidence before concluding the review.
+- Use `../ccg-team/scripts/team_plan_checker.js validate <plan.md> --json` when the assignment or conflict picture is unclear.
 - Worker outputs match assigned scopes.
 - Diff respects file ownership and merge strategy.
 - Tests and verification match the plan.

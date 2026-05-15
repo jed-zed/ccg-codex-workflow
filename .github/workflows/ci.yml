@@ -30,8 +30,11 @@ jobs:
       - name: Validate phase-one compatibility
         run: node scripts/validate-plugin.js --phase-one
 
-      - name: Validate full original CCG parity
-        run: node scripts/validate-plugin.js --full-parity
+      - name: Validate full parity surface
+        run: node scripts/validate-plugin.js --full-parity-surface
+
+      - name: Validate full parity behavior
+        run: node scripts/validate-plugin.js --full-parity-behavior
 
       - name: Compile Gemini preview helper
         run: python -m py_compile plugins/ccg/skills/ccg-executor/scripts/invoke_gemini_preview.py

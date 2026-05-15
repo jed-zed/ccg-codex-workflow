@@ -14,4 +14,4 @@ The user invoked:
 
 Use the installed CCG plugin skill `ccg:team-exec`.
 
-Detect same-file conflicts before dispatch. Codex reviews and verifies all final changes.
+Run `team_plan_checker.js` before dispatch, stop when `can_execute=false`, and let Codex review and verify all final changes.
