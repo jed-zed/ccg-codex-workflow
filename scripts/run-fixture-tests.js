@@ -188,6 +188,35 @@ const ccgExecutorSkill = path.join(repoRoot, "plugins", "ccg", "skills", "ccg-ex
 const ccgDoctorSkill = path.join(repoRoot, "plugins", "ccg", "skills", "ccg-doctor", "SKILL.md");
 const realPluginRoot = path.join(repoRoot, "plugins", "ccg");
 const phaseOneCommands = ["feat", "frontend", "backend", "analyze", "debug", "optimize", "test", "enhance"];
+const fullParityCommands = [
+  "workflow",
+  "plan",
+  "execute",
+  "codex-exec",
+  "review",
+  ...phaseOneCommands,
+  "init",
+  "context",
+  "commit",
+  "rollback",
+  "clean-branches",
+  "worktree",
+  "spec-init",
+  "spec-research",
+  "spec-plan",
+  "spec-impl",
+  "spec-review",
+  "team",
+  "team-research",
+  "team-plan",
+  "team-exec",
+  "team-review",
+];
+const contextManager = path.join(repoRoot, "plugins", "ccg", "skills", "ccg-context", "scripts", "context_manager.js");
+const commitHelper = path.join(repoRoot, "plugins", "ccg", "skills", "ccg-commit", "scripts", "commit_helper.js");
+const rollbackHelper = path.join(repoRoot, "plugins", "ccg", "skills", "ccg-rollback", "scripts", "rollback_helper.js");
+const cleanBranchesHelper = path.join(repoRoot, "plugins", "ccg", "skills", "ccg-clean-branches", "scripts", "clean_branches.js");
+const worktreeHelper = path.join(repoRoot, "plugins", "ccg", "skills", "ccg-worktree", "scripts", "worktree_helper.js");
 const extendedGeminiTemplates = [
   "base",
   "general",
@@ -725,7 +754,7 @@ test("CCG skills require browser preview for every workflow Gemini call", () => 
   );
 });
 
-test("original CCG phase-one commands have command, skill, agent, and index coverage", () => {
+test("fixture:phase-one original CCG phase-one commands have command, skill, agent, and index coverage", () => {
   const ccgCommand = fs.readFileSync(path.join(repoRoot, "plugins", "ccg", "commands", "ccg.md"), "utf8");
   const ccgSkill = fs.readFileSync(path.join(repoRoot, "plugins", "ccg", "skills", "ccg", "SKILL.md"), "utf8");
   const readme = fs.readFileSync(path.join(repoRoot, "README.md"), "utf8");
@@ -1146,6 +1175,99 @@ test("ccg-doctor skill keeps fix read-only outside source checkout", () => {
   assert(text.includes("--fix"), "expected /ccg:doctor --fix guidance");
   assert(text.includes("source checkout"), "expected source checkout guard");
   assert(text.includes("read-only"), "expected read-only fallback guidance");
+});
+
+test("fixture:artifact-path ccg-plan hard-codes Chinese Codex-native plan output", () => {
+  const planSkill = fs.readFileSync(ccgPlanSkill, "utf8");
+  const planCommand = fs.readFileSync(path.join(repoRoot, "plugins", "ccg", "commands", "plan.md"), "utf8");
+  assert(planSkill.includes(".codex/ccg/plans/<slug>.md"), "expected new plan paths under .codex/ccg/plans");
+  assert(planSkill.includes("The generated plan file itself must also be Chinese"), "expected saved-plan Chinese contract");
+  assert(planSkill.includes("# CCG 计划"), "expected Chinese plan template heading");
+  assert(planCommand.includes("saved CCG plan content itself must be Chinese"), "expected command to hard-code saved-plan Chinese output");
+  assert(!planSkill.includes("Write only `.claude/plan/*.md`"), "did not expect .claude/plan as default write target");
+});
+
+test("fixture:artifact-path full parity command assets exist", () => {
+  for (const command of fullParityCommands) {
+    assert(
+      fs.existsSync(path.join(repoRoot, "plugins", "ccg", "commands", `${command}.md`)),
+      `expected command file for /ccg:${command}`
+    );
+    assert(
+      fs.existsSync(path.join(repoRoot, "plugins", "ccg", "skills", `ccg-${command}`, "SKILL.md")),
+      `expected skill file for /ccg:${command}`
+    );
+    assert(
+      fs.existsSync(path.join(repoRoot, "plugins", "ccg", "skills", `ccg-${command}`, "agents", "openai.yaml")),
+      `expected agent file for /ccg:${command}`
+    );
+  }
+});
+
+test("fixture:core core CCG commands remain indexed", () => {
+  const ccgCommand = fs.readFileSync(path.join(repoRoot, "plugins", "ccg", "commands", "ccg.md"), "utf8");
+  const ccgSkill = fs.readFileSync(path.join(repoRoot, "plugins", "ccg", "skills", "ccg", "SKILL.md"), "utf8");
+  for (const command of ["workflow", "plan", "execute", "codex-exec", "review"]) {
+    assert(ccgCommand.includes(`/ccg:${command}`), `expected command index to include /ccg:${command}`);
+    assert(ccgSkill.includes(`/ccg:${command}`), `expected skill index to include /ccg:${command}`);
+  }
+});
+
+test("fixture:git-context context manager writes Codex context artifacts", () => {
+  const dir = tempDir("ccg-context-fixture-");
+  run(node, [contextManager, "init"], { cwd: dir });
+  run(node, [contextManager, "log", "first note"], { cwd: dir });
+  run(node, [contextManager, "summarize"], { cwd: dir });
+  const contextRoot = path.join(dir, ".codex", "ccg", "context");
+  assert(fs.existsSync(path.join(contextRoot, "history.md")), "expected history.md");
+  assert(fs.existsSync(path.join(contextRoot, "current-summary.md")), "expected current-summary.md");
+  assert(fs.readdirSync(path.join(contextRoot, "events")).length === 1, "expected one event file");
+  const clear = run(node, [contextManager, "clear", "--dry-run"], { cwd: dir });
+  assert(clear.stdout.includes("dry-run"), "expected clear dry-run by default");
+  assert(fs.readFileSync(path.join(contextRoot, "history.md"), "utf8").includes("first note"), "expected raw history preserved");
+});
+
+test("fixture:git-context git helpers default to safe dry-run behavior", () => {
+  const dir = initGitRepo();
+  writeFile(path.join(dir, "src", "auth.js"), "export const token = 'fixture';\n");
+  const commit = run(node, [commitHelper, "--json"], { cwd: dir });
+  const commitJson = parseJsonOutput(commit);
+  assert(commitJson.executed === false, "expected commit helper not to commit by default");
+  assert(commitJson.securitySensitive === true, "expected security-sensitive path detection");
+
+  const rollback = run(node, [rollbackHelper, "--last", "--json"], { cwd: dir });
+  const rollbackJson = parseJsonOutput(rollback);
+  assert(rollbackJson.dryRun === true, "expected rollback dry-run by default");
+  assert(rollbackJson.commands[0].includes("git revert --no-commit"), "expected revert preview");
+
+  const dangerous = run(node, [rollbackHelper, "reset", "--hard"], { cwd: dir, allowFailure: true });
+  assert(dangerous.status !== 0, "expected destructive reset to be blocked");
+
+  const clean = run(node, [cleanBranchesHelper, "--json"], { cwd: dir });
+  const cleanJson = parseJsonOutput(clean);
+  assert(cleanJson.dryRun === true, "expected branch cleanup dry-run by default");
+
+  const worktree = run(node, [worktreeHelper, "list", "--json"], { cwd: dir });
+  const worktreeJson = parseJsonOutput(worktree);
+  assert(worktreeJson.command === "list", "expected worktree list command");
+});
+
+test("fixture:spec spec skills require Codex spec storage", () => {
+  for (const command of ["spec-init", "spec-research", "spec-plan", "spec-impl", "spec-review"]) {
+    const text = fs.readFileSync(path.join(repoRoot, "plugins", "ccg", "skills", `ccg-${command}`, "SKILL.md"), "utf8");
+    assert(text.includes(".codex/ccg/specs"), `expected /ccg:${command} to use .codex/ccg/specs`);
+  }
+  const docs = fs.readFileSync(path.join(repoRoot, "docs", "spec-workflow.md"), "utf8");
+  assert(docs.includes(".codex/ccg/specs/<spec-name>"), "expected spec workflow docs");
+});
+
+test("fixture:team team skills require ownership and conflict checks", () => {
+  const exec = fs.readFileSync(path.join(repoRoot, "plugins", "ccg", "skills", "ccg-team-exec", "SKILL.md"), "utf8");
+  const plan = fs.readFileSync(path.join(repoRoot, "plugins", "ccg", "skills", "ccg-team-plan", "SKILL.md"), "utf8");
+  const docs = fs.readFileSync(path.join(repoRoot, "docs", "team-workflow.md"), "utf8");
+  assert(exec.includes("same file") || exec.includes("same-file"), "expected same-file conflict guidance");
+  assert(plan.includes("Workers"), "expected worker ownership plan structure");
+  assert(docs.includes("Codex remains final owner"), "expected Codex final owner rule");
 });
 
 let failures = 0;

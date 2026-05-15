@@ -32,6 +32,22 @@ If `$ARGUMENTS` is empty, show the available CCG commands in Chinese:
 - `/ccg:optimize <target>` - optimize with evidence and regression checks.
 - `/ccg:test <target>` - add, repair, or design tests.
 - `/ccg:enhance <task>` - enhance existing behavior while preserving local patterns.
+- `/ccg:init` - initialize Codex-native CCG project artifacts under `.codex/ccg/`.
+- `/ccg:context <subcommand>` - manage Codex-native context history under `.codex/ccg/context/`.
+- `/ccg:commit` - prepare a safe commit message and gate checklist.
+- `/ccg:rollback` - plan safe rollback or revert operations.
+- `/ccg:clean-branches` - dry-run cleanup of safely merged branches.
+- `/ccg:worktree <subcommand>` - manage Git worktrees with safety checks.
+- `/ccg:spec-init` - initialize `.codex/ccg/specs/`.
+- `/ccg:spec-research <requirement>` - write spec research and constraints.
+- `/ccg:spec-plan <spec>` - create a Chinese spec-backed CCG plan.
+- `/ccg:spec-impl <spec>` - execute a spec-backed plan.
+- `/ccg:spec-review <spec>` - review spec, plan, implementation, and tests.
+- `/ccg:team` - show Codex-native team workflow commands.
+- `/ccg:team-research <task>` - research a task for worker ownership.
+- `/ccg:team-plan <task>` - create a worker ownership plan.
+- `/ccg:team-exec <plan>` - execute scoped worker plans with Codex as final owner.
+- `/ccg:team-review <task>` - review worker output, diffs, and tests.
 - `/ccg:review [plan-or-diff]` - review a CCG implementation.
 - `/ccg:gemini-preview <prompt>` - run Gemini with a live browser preview.
 - `/ccg:gen-docs <module-path>` - generate README/DESIGN skeletons.

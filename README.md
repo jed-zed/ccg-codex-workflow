@@ -26,7 +26,7 @@ Codex Desktop has been manually verified to show `/ccg:*` slash-command autocomp
 ```text
 /ccg:doctor
 /ccg:plan Add user login audit logging
-/ccg:execute .claude/plan/my-task.md
+/ccg:execute .codex/ccg/plans/my-task.md
 ```
 
 If a TUI build intercepts unknown leading-slash input before the model sees it, prefix the prompt:
@@ -34,7 +34,7 @@ If a TUI build intercepts unknown leading-slash input before the model sees it, 
 ```text
 Execute /ccg:doctor
 Execute /ccg:plan Add user login audit logging
-Execute /ccg:execute .claude/plan/my-task.md
+Execute /ccg:execute .codex/ccg/plans/my-task.md
 ```
 
 ### Codex Compatibility Matrix
@@ -115,14 +115,28 @@ For a release-readiness smoke test, verify all of the following on the target ma
 - `codex mcp list` shows the expected plugin or global MCP entries.
 - `/ccg:doctor` reports no `FAIL`.
 - `/ccg:gemini-preview Reply exactly: CCG_OK` opens the browser preview automatically and writes a non-empty `CCG_GEMINI_RESPONSE_FILE` containing `CCG_OK`.
-- `/ccg:plan <small smoke requirement>` asks Gemini through the preview helper, writes only `.claude/plan/*.md`, and replies in Chinese.
+- `/ccg:plan <small smoke requirement>` asks Gemini through the preview helper, writes a Chinese plan under `.codex/ccg/plans/*.md`, and replies in Chinese.
 - GitHub Actions is green on both Ubuntu and Windows before publishing a stable release.
+
+### Codex Artifact Paths
+
+New CCG artifacts are Codex-owned by default:
+
+```text
+.codex/ccg/plans/*.md
+.codex/ccg/context/**
+.codex/ccg/specs/**
+.codex/ccg/team/**
+.codex/ccg/tmp/**
+```
+
+Legacy `.claude/plan/*.md`, `CLAUDE.md`, `.context/**`, and `openspec/**` files remain readable migration inputs. New `/ccg:plan` output must not default to `.claude/plan`; saved plan content itself is Chinese by default, including section headings, tables, checklists, analysis, risks, test strategy, and handoff prose.
 
 ### Original CCG Parity Status
 
-The original CCG workflow exposes a broader 29+ command surface. This Codex-native plugin now has the core planner/executor/review/doctor gates plus the first high-frequency parity group: `/ccg:feat`, `/ccg:frontend`, `/ccg:backend`, `/ccg:analyze`, `/ccg:debug`, `/ccg:optimize`, `/ccg:test`, and `/ccg:enhance`.
+The original CCG workflow exposes a broader 29+ command surface. This Codex-native plugin now implements the core planner/executor/review/doctor gates, the high-frequency parity group, Git/context helpers, OPSX/spec commands, and Codex-native team workflow commands. Full original CCG command-surface parity is achieved; behavioral parity is implemented as safer Codex-native adaptations rather than behavior-for-behavior copies. Full parity release language still requires local validation and a real green GitHub Actions run on Ubuntu and Windows.
 
-The detailed tracking table lives in `docs/original-ccg-parity-matrix.md`. Later parity phases cover Git/context helpers, OPSX/spec commands, team workflows, domain skills, Impeccable UI, and Scrapling. Claude wrapper behavior and legacy `SESSION_ID` resume are intentionally not copied.
+The detailed tracking table lives in `docs/original-ccg-parity-matrix.md`. Domain skills, Impeccable UI, and Scrapling safety guidance are migrated as Codex rules. Claude wrapper behavior and legacy `SESSION_ID` resume are intentionally not copied.
 
 The plugin provides these prompt invocations and matching skills:
 
@@ -142,6 +156,22 @@ The plugin provides these prompt invocations and matching skills:
 /ccg:optimize
 /ccg:test
 /ccg:enhance
+/ccg:init
+/ccg:context
+/ccg:commit
+/ccg:rollback
+/ccg:clean-branches
+/ccg:worktree
+/ccg:spec-init
+/ccg:spec-research
+/ccg:spec-plan
+/ccg:spec-impl
+/ccg:spec-review
+/ccg:team
+/ccg:team-research
+/ccg:team-plan
+/ccg:team-exec
+/ccg:team-review
 /ccg:review
 /ccg:gemini-preview
 /ccg:gen-docs
@@ -201,11 +231,17 @@ Create a Codex-native CCG plan:
 /ccg:plan Add user login audit logging
 ```
 
-Real `/ccg:plan` runs require Gemini participation. Codex must launch the preview helper, read a non-empty `CCG_GEMINI_RESPONSE_FILE`, and include Codex/Gemini analysis before writing `.claude/plan/*.md`. If Gemini fails, planning stops instead of producing a fake dual-model plan.
+Real `/ccg:plan` runs require Gemini participation. Codex must launch the preview helper, read a non-empty `CCG_GEMINI_RESPONSE_FILE`, and include Codex/Gemini analysis before writing `.codex/ccg/plans/*.md`. If Gemini fails, planning stops instead of producing a fake dual-model plan.
 
-`/ccg:plan` user-facing output is Chinese by default. English remains acceptable for literal commands, paths, generated slugs, model names, environment variables, code identifiers, and clearly labeled raw Gemini excerpts.
+`/ccg:plan` user-facing output and saved plan content are Chinese by default. English remains acceptable for literal commands, paths, generated slugs, model names, environment variables, code identifiers, and clearly labeled raw Gemini excerpts.
 
 Execute a CCG plan:
+
+```text
+/ccg:execute .codex/ccg/plans/my-task.md
+```
+
+Legacy plans remain executable as explicit compatibility inputs:
 
 ```text
 /ccg:execute .claude/plan/my-task.md
@@ -229,7 +265,7 @@ Execution has two practical Gemini policies:
 Use the typo-compatible alias:
 
 ```text
-/ccg:excute .claude/plan/my-task.md
+/ccg:excute .codex/ccg/plans/my-task.md
 ```
 
 Ask Gemini for bounded help with a browser preview:
@@ -312,7 +348,8 @@ Use `--direct-workdir` only when you explicitly want Gemini to run against the r
 ## Development Checks
 
 ```powershell
-node .\scripts\validate-plugin.js
+node .\scripts\validate-plugin.js --phase-one
+node .\scripts\validate-plugin.js --full-parity
 python -m py_compile .\plugins\ccg\skills\ccg-executor\scripts\invoke_gemini_preview.py
 node .\scripts\run-fixture-tests.js
 ```

@@ -21,7 +21,7 @@ The Claude-side `codeagent-wrapper`, Claude command files, and Claude execution 
 
 ## Old Plans
 
-Legacy `.claude/plan/*.md` files can still be used as input artifacts for `/ccg:execute`. Codex treats them as implementation intent:
+Legacy `.claude/plan/*.md` files can still be used as input artifacts for `/ccg:execute`. New Codex-native plans are written under `.codex/ccg/plans/*.md`. Codex treats legacy plans as implementation intent:
 
 - title and task type;
 - implementation steps;
@@ -30,6 +30,20 @@ Legacy `.claude/plan/*.md` files can still be used as input artifacts for `/ccg:
 - historical model/session notes.
 
 Codex will re-read repository context before editing. It does not assume the old plan context is still complete or current.
+
+## Codex Artifact Paths
+
+New CCG products belong to Codex-owned project paths:
+
+```text
+.codex/ccg/plans/*.md
+.codex/ccg/context/**
+.codex/ccg/specs/**
+.codex/ccg/team/**
+.codex/ccg/tmp/**
+```
+
+Legacy `.claude/plan/*.md`, `CLAUDE.md`, `.context/**`, and `openspec/**` files are read-compatible migration inputs. They are not the default write target. `/ccg:plan` saves Chinese plan content under `.codex/ccg/plans/*.md` unless the user explicitly asks to revise an existing legacy plan file.
 
 ## Session IDs
 
@@ -47,8 +61,11 @@ The helper creates a disposable snapshot by default, opens a browser preview, wr
 
 | Original idea | Codex-native behavior |
 |---------------|-----------------------|
-| Claude `/ccg:plan` | `/ccg:plan` creates or revises `.claude/plan/*.md` with Codex as planner and Gemini as read-only analysis helper. |
-| Claude `/ccg:execute` | `/ccg:execute` makes Codex apply final edits, run verification, review diffs, and report in Chinese. |
+| Claude `/ccg:plan` | `/ccg:plan` creates Chinese `.codex/ccg/plans/*.md` plans with Codex as planner and Gemini as read-only analysis helper. |
+| Claude `/ccg:execute` | `/ccg:execute` makes Codex apply final edits, run verification, review diffs, and report in Chinese. It accepts `.codex/ccg/plans/*.md` and explicit legacy `.claude/plan/*.md` inputs. |
+| Claude `.context/` | `.codex/ccg/context/**` stores Codex-native history, summary, and event files. |
+| OPSX / OpenSpec paths | `.codex/ccg/specs/**` stores research, constraints, plan, review, and archive files. |
+| Agent Teams | `/ccg:team-*` uses scoped Codex workers with Codex as final owner. |
 | Wrapper Web UI | Gemini preview helper opens a localhost browser page with process status, parsed output, raw stream logs, and auto-close on completion. |
 | `SESSION_ID` resume | Not supported; Codex re-searches context and launches fresh Gemini helper calls when useful. |
 
@@ -57,7 +74,8 @@ The helper creates a disposable snapshot by default, opens a browser preview, wr
 1. Install or sync the Codex plugin.
 2. Run `powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\doctor.ps1 -Verbose`.
 3. Confirm `codex debug prompt-input | Select-String "ccg:"` can see the skills.
-4. Use legacy plans as normal `/ccg:execute .claude/plan/<file>.md` inputs.
-5. Expect Codex to re-validate context and tests instead of trusting old wrapper sessions.
+4. Create new plans with `/ccg:plan <task>` and execute them with `/ccg:execute .codex/ccg/plans/<file>.md`.
+5. Use legacy plans only as explicit `/ccg:execute .claude/plan/<file>.md` compatibility inputs.
+6. Expect Codex to re-validate context and tests instead of trusting old wrapper sessions.
 
 If a legacy plan relies on secret files, production state, or old hidden session context, provide a sanitized excerpt or updated requirement before execution.

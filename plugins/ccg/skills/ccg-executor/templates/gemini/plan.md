@@ -10,4 +10,4 @@ Use this role during `/ccg:plan`.
 4. Test strategy.
 5. Risks and mitigations.
 
-Do not write a final plan file. Codex will synthesize the final `.claude/plan/*.md`.
+Do not write a final plan file. Codex will synthesize the final Chinese `.codex/ccg/plans/*.md` plan.

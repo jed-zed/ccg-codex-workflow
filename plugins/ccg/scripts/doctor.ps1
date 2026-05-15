@@ -314,6 +314,9 @@ foreach ($commandName in @(
   "ccg.md",
   "plan.md",
   "execute.md",
+  "excute.md",
+  "codex-exec.md",
+  "workflow.md",
   "feat.md",
   "frontend.md",
   "backend.md",
@@ -322,6 +325,23 @@ foreach ($commandName in @(
   "optimize.md",
   "test.md",
   "enhance.md",
+  "review.md",
+  "init.md",
+  "context.md",
+  "commit.md",
+  "rollback.md",
+  "clean-branches.md",
+  "worktree.md",
+  "spec-init.md",
+  "spec-research.md",
+  "spec-plan.md",
+  "spec-impl.md",
+  "spec-review.md",
+  "team.md",
+  "team-research.md",
+  "team-plan.md",
+  "team-exec.md",
+  "team-review.md",
   "doctor.md",
   "gemini-preview.md",
   "verify-change.md"
@@ -333,6 +353,9 @@ foreach ($commandName in @(
 foreach ($skillName in @(
   "ccg-plan",
   "ccg-execute",
+  "ccg-excute",
+  "ccg-codex-exec",
+  "ccg-workflow",
   "ccg-feat",
   "ccg-frontend",
   "ccg-backend",
@@ -341,6 +364,23 @@ foreach ($skillName in @(
   "ccg-optimize",
   "ccg-test",
   "ccg-enhance",
+  "ccg-review",
+  "ccg-init",
+  "ccg-context",
+  "ccg-commit",
+  "ccg-rollback",
+  "ccg-clean-branches",
+  "ccg-worktree",
+  "ccg-spec-init",
+  "ccg-spec-research",
+  "ccg-spec-plan",
+  "ccg-spec-impl",
+  "ccg-spec-review",
+  "ccg-team",
+  "ccg-team-research",
+  "ccg-team-plan",
+  "ccg-team-exec",
+  "ccg-team-review",
   "ccg-doctor",
   "ccg-gemini-preview",
   "verify-change"
@@ -371,14 +411,56 @@ if (Test-Path -LiteralPath $cacheRoot) {
   foreach ($relativePath in @(
     ".codex-plugin\plugin.json",
     "commands\plan.md",
+    "commands\execute.md",
+    "commands\excute.md",
+    "commands\codex-exec.md",
+    "commands\workflow.md",
     "commands\feat.md",
     "commands\frontend.md",
     "commands\backend.md",
+    "commands\init.md",
+    "commands\context.md",
+    "commands\commit.md",
+    "commands\rollback.md",
+    "commands\clean-branches.md",
+    "commands\worktree.md",
+    "commands\spec-init.md",
+    "commands\spec-research.md",
+    "commands\spec-plan.md",
+    "commands\spec-impl.md",
+    "commands\spec-review.md",
+    "commands\team.md",
+    "commands\team-research.md",
+    "commands\team-plan.md",
+    "commands\team-exec.md",
+    "commands\team-review.md",
+    "commands\review.md",
     "commands\doctor.md",
     "skills\ccg-plan\SKILL.md",
+    "skills\ccg-execute\SKILL.md",
+    "skills\ccg-excute\SKILL.md",
+    "skills\ccg-codex-exec\SKILL.md",
+    "skills\ccg-workflow\SKILL.md",
     "skills\ccg-feat\SKILL.md",
     "skills\ccg-frontend\SKILL.md",
     "skills\ccg-backend\SKILL.md",
+    "skills\ccg-init\SKILL.md",
+    "skills\ccg-context\SKILL.md",
+    "skills\ccg-commit\SKILL.md",
+    "skills\ccg-rollback\SKILL.md",
+    "skills\ccg-clean-branches\SKILL.md",
+    "skills\ccg-worktree\SKILL.md",
+    "skills\ccg-spec-init\SKILL.md",
+    "skills\ccg-spec-research\SKILL.md",
+    "skills\ccg-spec-plan\SKILL.md",
+    "skills\ccg-spec-impl\SKILL.md",
+    "skills\ccg-spec-review\SKILL.md",
+    "skills\ccg-team\SKILL.md",
+    "skills\ccg-team-research\SKILL.md",
+    "skills\ccg-team-plan\SKILL.md",
+    "skills\ccg-team-exec\SKILL.md",
+    "skills\ccg-team-review\SKILL.md",
+    "skills\ccg-review\SKILL.md",
     "skills\ccg-doctor\SKILL.md",
     "skills\ccg-executor\scripts\invoke_gemini_preview.py",
     "scripts\doctor.ps1"
@@ -389,6 +471,9 @@ if (Test-Path -LiteralPath $cacheRoot) {
   foreach ($skillName in @(
     "ccg-plan",
     "ccg-execute",
+    "ccg-excute",
+    "ccg-codex-exec",
+    "ccg-workflow",
     "ccg-feat",
     "ccg-frontend",
     "ccg-backend",
@@ -397,6 +482,23 @@ if (Test-Path -LiteralPath $cacheRoot) {
     "ccg-optimize",
     "ccg-test",
     "ccg-enhance",
+    "ccg-review",
+    "ccg-init",
+    "ccg-context",
+    "ccg-commit",
+    "ccg-rollback",
+    "ccg-clean-branches",
+    "ccg-worktree",
+    "ccg-spec-init",
+    "ccg-spec-research",
+    "ccg-spec-plan",
+    "ccg-spec-impl",
+    "ccg-spec-review",
+    "ccg-team",
+    "ccg-team-research",
+    "ccg-team-plan",
+    "ccg-team-exec",
+    "ccg-team-review",
     "ccg-doctor",
     "ccg-gemini-preview",
     "verify-change"
@@ -436,6 +538,9 @@ if ($codexCommand) {
 foreach ($skill in @(
   "ccg:plan",
   "ccg:execute",
+  "ccg:excute",
+  "ccg:codex-exec",
+  "ccg:workflow",
   "ccg:feat",
   "ccg:frontend",
   "ccg:backend",
@@ -444,6 +549,23 @@ foreach ($skill in @(
   "ccg:optimize",
   "ccg:test",
   "ccg:enhance",
+  "ccg:review",
+  "ccg:init",
+  "ccg:context",
+  "ccg:commit",
+  "ccg:rollback",
+  "ccg:clean-branches",
+  "ccg:worktree",
+  "ccg:spec-init",
+  "ccg:spec-research",
+  "ccg:spec-plan",
+  "ccg:spec-impl",
+  "ccg:spec-review",
+  "ccg:team",
+  "ccg:team-research",
+  "ccg:team-plan",
+  "ccg:team-exec",
+  "ccg:team-review",
   "ccg:doctor",
   "ccg:gemini-preview",
   "ccg:verify-change"
@@ -474,6 +596,9 @@ Test-BridgeFile "ccg.md" (Join-Path $commandsRoot "ccg.md")
 $bridgeCommandDir = Join-Path $commandsRoot "ccg"
 Test-BridgeFile "ccg\plan.md" (Join-Path $bridgeCommandDir "plan.md")
 Test-BridgeFile "ccg\execute.md" (Join-Path $bridgeCommandDir "execute.md")
+Test-BridgeFile "ccg\excute.md" (Join-Path $bridgeCommandDir "excute.md")
+Test-BridgeFile "ccg\codex-exec.md" (Join-Path $bridgeCommandDir "codex-exec.md")
+Test-BridgeFile "ccg\workflow.md" (Join-Path $bridgeCommandDir "workflow.md")
 Test-BridgeFile "ccg\feat.md" (Join-Path $bridgeCommandDir "feat.md")
 Test-BridgeFile "ccg\frontend.md" (Join-Path $bridgeCommandDir "frontend.md")
 Test-BridgeFile "ccg\backend.md" (Join-Path $bridgeCommandDir "backend.md")
@@ -482,6 +607,23 @@ Test-BridgeFile "ccg\debug.md" (Join-Path $bridgeCommandDir "debug.md")
 Test-BridgeFile "ccg\optimize.md" (Join-Path $bridgeCommandDir "optimize.md")
 Test-BridgeFile "ccg\test.md" (Join-Path $bridgeCommandDir "test.md")
 Test-BridgeFile "ccg\enhance.md" (Join-Path $bridgeCommandDir "enhance.md")
+Test-BridgeFile "ccg\review.md" (Join-Path $bridgeCommandDir "review.md")
+Test-BridgeFile "ccg\init.md" (Join-Path $bridgeCommandDir "init.md")
+Test-BridgeFile "ccg\context.md" (Join-Path $bridgeCommandDir "context.md")
+Test-BridgeFile "ccg\commit.md" (Join-Path $bridgeCommandDir "commit.md")
+Test-BridgeFile "ccg\rollback.md" (Join-Path $bridgeCommandDir "rollback.md")
+Test-BridgeFile "ccg\clean-branches.md" (Join-Path $bridgeCommandDir "clean-branches.md")
+Test-BridgeFile "ccg\worktree.md" (Join-Path $bridgeCommandDir "worktree.md")
+Test-BridgeFile "ccg\spec-init.md" (Join-Path $bridgeCommandDir "spec-init.md")
+Test-BridgeFile "ccg\spec-research.md" (Join-Path $bridgeCommandDir "spec-research.md")
+Test-BridgeFile "ccg\spec-plan.md" (Join-Path $bridgeCommandDir "spec-plan.md")
+Test-BridgeFile "ccg\spec-impl.md" (Join-Path $bridgeCommandDir "spec-impl.md")
+Test-BridgeFile "ccg\spec-review.md" (Join-Path $bridgeCommandDir "spec-review.md")
+Test-BridgeFile "ccg\team.md" (Join-Path $bridgeCommandDir "team.md")
+Test-BridgeFile "ccg\team-research.md" (Join-Path $bridgeCommandDir "team-research.md")
+Test-BridgeFile "ccg\team-plan.md" (Join-Path $bridgeCommandDir "team-plan.md")
+Test-BridgeFile "ccg\team-exec.md" (Join-Path $bridgeCommandDir "team-exec.md")
+Test-BridgeFile "ccg\team-review.md" (Join-Path $bridgeCommandDir "team-review.md")
 Test-BridgeFile "ccg\doctor.md" (Join-Path $bridgeCommandDir "doctor.md")
 Test-BridgeFile "ccg\gemini-preview.md" (Join-Path $bridgeCommandDir "gemini-preview.md")
 

@@ -1,0 +1,3 @@
+display_name: CCG Spec Init
+short_description: Initialize Codex-native CCG specs.
+default_prompt: /ccg:spec-init

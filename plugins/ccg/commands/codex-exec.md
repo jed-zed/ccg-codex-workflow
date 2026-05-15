@@ -12,4 +12,4 @@ The user invoked:
 /ccg:codex-exec $ARGUMENTS
 ```
 
-Use the installed CCG plugin skill `ccg:executor` and follow it exactly. This command is equivalent to `/ccg:execute` in this Codex plugin: Codex reads the plan, gathers context, optionally delegates narrow tasks to Gemini, applies final edits, verifies, reviews, and reports in Chinese.
+Use the installed CCG plugin skill `ccg:executor` and follow it exactly. This command is equivalent to `/ccg:execute` in this Codex plugin: Codex reads `.codex/ccg/plans/*.md` plans or explicit legacy `.claude/plan/*.md` inputs, gathers context, optionally delegates narrow tasks to Gemini, applies final edits, verifies, reviews, and reports in Chinese.

@@ -1,3 +1,3 @@
 display_name: CCG Plan
-short_description: 用 Codex 和 Gemini 分析生成 CCG 实施计划，面向用户默认中文输出。
-default_prompt: /ccg:plan 请为这个需求生成 CCG 实施计划
+short_description: Create a Chinese Codex-native CCG plan with Gemini analysis.
+default_prompt: /ccg:plan 请为这个需求生成中文 CCG 实施计划

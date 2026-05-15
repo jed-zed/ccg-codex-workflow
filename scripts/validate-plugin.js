@@ -8,6 +8,7 @@ const { spawnSync } = require("child_process");
 const repoRoot = path.resolve(__dirname, "..");
 const node = process.execPath;
 const phaseOneCommands = ["feat", "frontend", "backend", "analyze", "debug", "optimize", "test", "enhance"];
+const phaseOneCoreCommands = ["workflow", "plan", "execute", "codex-exec", "review", ...phaseOneCommands];
 const geminiTemplates = [
   "base",
   "general",
@@ -21,6 +22,7 @@ const geminiTemplates = [
   "optimizer",
   "tester",
 ];
+const allowedArgs = new Set(["--phase-one", "--full-parity"]);
 
 function fail(message) {
   throw new Error(message);
@@ -228,18 +230,109 @@ function validatePlanLanguageContract() {
   for (const phrase of [
     "Language Contract",
     "user-facing output must be Chinese",
+    "generated plan file itself must also be Chinese",
+    "Use this Chinese Markdown structure",
+    "# CCG 计划",
     "usage/help",
     "failure reports",
     "handoff",
   ]) {
     if (!planSkill.includes(phrase)) fail(`ccg-plan skill is missing Chinese output phrase: ${phrase}`);
   }
+  if (!planSkill.includes(".codex/ccg/plans/<slug>.md")) {
+    fail("ccg-plan skill must write new plans under .codex/ccg/plans");
+  }
+  if (planSkill.includes("Write only `.claude/plan/*.md`")) {
+    fail("ccg-plan skill still hard-codes .claude/plan as the default write target");
+  }
 
   const command = fs.readFileSync(path.join(repoRoot, "plugins/ccg/commands/plan.md"), "utf8");
   if (!command.includes("user-facing output for this command must be Chinese")) {
     fail("plan command must reinforce Chinese user-facing output");
   }
+  if (!command.includes("saved CCG plan content itself must be Chinese")) {
+    fail("plan command must hard-code Chinese saved-plan content");
+  }
   console.log("plan language contract ok");
+}
+
+function extractFullParityRows() {
+  const matrixPath = path.join(repoRoot, "docs/original-ccg-parity-matrix.md");
+  const matrix = fs.readFileSync(matrixPath, "utf8");
+  const marker = "## Full Parity Required Commands";
+  const start = matrix.indexOf(marker);
+  if (start < 0) fail("parity matrix is missing Full Parity Required Commands section");
+  const rest = matrix.slice(start + marker.length);
+  const next = rest.search(/\n##\s+/);
+  const section = next >= 0 ? rest.slice(0, next) : rest;
+  return section
+    .split(/\r?\n/)
+    .filter((line) => /^\|\s*`?\/?ccg:|^\|\s*Claude|^\|\s*Legacy/.test(line))
+    .map((line) => line.split("|").slice(1, -1).map((cell) => cell.trim().replace(/^`|`$/g, "")))
+    .filter((cells) => cells.length >= 6)
+    .map(([command, required, status, group, reason, replacement]) => ({
+      command,
+      required: required.toLowerCase(),
+      status: status.toLowerCase(),
+      group,
+      reason,
+      replacement,
+    }));
+}
+
+function commandName(command) {
+  return command.replace(/^\/ccg:/, "");
+}
+
+function validateFullParity() {
+  const rows = extractFullParityRows();
+  if (!rows.length) fail("full parity matrix did not yield any command rows");
+
+  const ccgCommand = fs.readFileSync(path.join(repoRoot, "plugins/ccg/commands/ccg.md"), "utf8");
+  const ccgSkill = fs.readFileSync(path.join(repoRoot, "plugins/ccg/skills/ccg/SKILL.md"), "utf8");
+  const readme = fs.readFileSync(path.join(repoRoot, "README.md"), "utf8");
+  const bridge = fs.readFileSync(path.join(repoRoot, "scripts/install-codex-command-bridge.ps1"), "utf8");
+  const doctor = fs.readFileSync(path.join(repoRoot, "plugins/ccg/scripts/doctor.ps1"), "utf8");
+  const fixtures = fs.readFileSync(path.join(repoRoot, "scripts/run-fixture-tests.js"), "utf8");
+
+  const requiredRows = rows.filter((row) => row.required === "yes");
+  for (const row of requiredRows) {
+    const name = commandName(row.command);
+    if (row.status === "planned") fail(`full parity required command is still planned: ${row.command}`);
+    for (const file of [
+      `plugins/ccg/commands/${name}.md`,
+      `plugins/ccg/skills/ccg-${name}/SKILL.md`,
+      `plugins/ccg/skills/ccg-${name}/agents/openai.yaml`,
+    ]) {
+      if (!fs.existsSync(path.join(repoRoot, file))) fail(`missing full parity file for ${row.command}: ${file}`);
+    }
+    for (const [label, text, expected] of [
+      ["README", readme, row.command],
+      ["command index", ccgCommand, row.command],
+      ["skill index", ccgSkill, row.command],
+      ["bridge installer", bridge, `${name}.md`],
+      ["doctor script", doctor, `${name}.md`],
+      ["fixture coverage", fixtures, `fixture:${row.group}`],
+    ]) {
+      if (!text.includes(expected)) fail(`${label} missing full parity coverage for ${row.command}: ${expected}`);
+    }
+  }
+
+  for (const row of rows.filter((candidate) => candidate.status === "not-copied")) {
+    if (!row.reason || row.reason === "-" || /tbd/i.test(row.reason)) {
+      fail(`not-copied row needs a reason: ${row.command}`);
+    }
+    if (!row.replacement || row.replacement === "-" || /tbd/i.test(row.replacement)) {
+      fail(`not-copied row needs a Codex-native replacement: ${row.command}`);
+    }
+  }
+
+  for (const command of phaseOneCoreCommands) {
+    if (!requiredRows.some((row) => row.command === `/ccg:${command}`)) {
+      fail(`full parity matrix missing phase-one/core command: /ccg:${command}`);
+    }
+  }
+  console.log(`original CCG full parity ok - ${requiredRows.length} required command(s)`);
 }
 
 function validateReleaseDocs() {
@@ -357,6 +450,10 @@ function nodeCheck() {
 }
 
 function main() {
+  for (const arg of process.argv.slice(2)) {
+    if (!allowedArgs.has(arg)) fail(`unknown argument: ${arg}`);
+  }
+  const fullParity = process.argv.includes("--full-parity");
   validateJson();
   validateScripts();
   validateGeminiDefaults();
@@ -368,6 +465,7 @@ function main() {
   validateCiActions();
   validateSkills();
   nodeCheck();
+  if (fullParity) validateFullParity();
 }
 
 main();

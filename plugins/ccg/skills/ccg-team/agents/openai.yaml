@@ -1,0 +1,3 @@
+display_name: CCG Team
+short_description: Route Codex-native CCG team workflows.
+default_prompt: /ccg:team
