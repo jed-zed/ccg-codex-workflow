@@ -49,6 +49,12 @@ function unique(items) {
   return [...new Set(items)];
 }
 
+function getFlagValue(args, flag) {
+  const index = args.indexOf(flag);
+  if (index < 0) return null;
+  return args[index + 1] || null;
+}
+
 function isSecuritySensitive(file) {
   return /(auth|security|secret|token|permission|upload|network|shell|exec|\.env|key|credential)/i.test(file);
 }
@@ -111,7 +117,7 @@ function gateStatusFromJson(name, json, exitStatus) {
   };
 }
 
-function runGate(name, targets, cwd = process.cwd()) {
+function runGate(name, targets, cwd = process.cwd(), options = {}) {
   const scriptPath = resolveGateScript(name);
   if (!fs.existsSync(scriptPath)) {
     return {
@@ -138,14 +144,15 @@ function runGate(name, targets, cwd = process.cwd()) {
   }
 
   if (name === "verify-change") {
-    const raw = runNodeScript(scriptPath, ["--json"], { cwd });
+    const args = options.changeMode === "staged" ? ["--mode", "staged", "--json"] : ["--json"];
+    const raw = runNodeScript(scriptPath, args, { cwd });
     const json = parseJsonOutput(name, raw);
     const status = gateStatusFromJson(name, json, raw.status);
     return {
       ran: true,
       passed: status.passed,
       warnings: status.warnings,
-      command: `node ${scriptPath} --json`,
+      command: `node ${scriptPath} ${args.join(" ")}`,
       targets: ["."],
       reason: status.reason,
       details: [{ target: ".", exit_status: raw.status, json, summary: status.summary }],
@@ -220,12 +227,36 @@ function analyze(cwd = process.cwd()) {
   };
 }
 
+function scopeFields(result, scope, cwd = process.cwd()) {
+  const gatedChanged = scope === "staged" ? result.staged : result.changed;
+  const gatedScanTargets = unique(
+    gatedChanged
+      .map((file) => file.replace(/\\/g, "/"))
+      .filter((file) => fs.existsSync(path.resolve(cwd, file)))
+  );
+  const gatedSecurityTargets = gatedScanTargets.filter((file) => isSecuritySensitive(file));
+  const scopeWarnings = [];
+  if (scope === "staged") {
+    if (result.unstaged.length) scopeWarnings.push(`unstaged changes not gated: ${result.unstaged.join(", ")}`);
+    if (result.untracked.length) scopeWarnings.push(`untracked files not gated: ${result.untracked.join(", ")}`);
+  }
+  return {
+    scope,
+    gatedChanged,
+    gatedScanTargets,
+    gatedSecuritySensitive: gatedChanged.some((file) => isSecuritySensitive(file)),
+    gatedSecurityTargets,
+    scope_warnings: scopeWarnings,
+  };
+}
+
 function runGates(result, cwd = process.cwd()) {
+  const changeMode = result.scope === "staged" ? "staged" : "working";
   const gates = {
-    "verify-change": runGate("verify-change", ["."], cwd),
-    "verify-quality": runGate("verify-quality", result.scanTargets, cwd),
-    "verify-security": result.securitySensitive
-      ? runGate("verify-security", result.securityTargets, cwd)
+    "verify-change": runGate("verify-change", ["."], cwd, { changeMode }),
+    "verify-quality": runGate("verify-quality", result.gatedScanTargets, cwd),
+    "verify-security": result.gatedSecuritySensitive
+      ? runGate("verify-security", result.gatedSecurityTargets, cwd)
       : {
           ran: false,
           passed: true,
@@ -252,9 +283,14 @@ function runGates(result, cwd = process.cwd()) {
 
 function formatHuman(result) {
   const lines = [result.status || "clean", `message: ${result.message}`, `command: ${result.command}`];
+  lines.push(`scope: ${result.scope}`);
   lines.push(`canCommit: ${result.canCommit}`);
   lines.push(`executed: ${result.executed}`);
   if (result.securitySensitive) lines.push("security-sensitive paths detected.");
+  if (result.scope_warnings && result.scope_warnings.length) {
+    lines.push("scope_warnings:");
+    for (const warning of result.scope_warnings) lines.push(`- ${warning}`);
+  }
   if (result.gate_failures && result.gate_failures.length) {
     lines.push("gate_failures:");
     for (const failure of result.gate_failures) lines.push(`- ${failure}`);
@@ -272,8 +308,13 @@ function main(argv = process.argv.slice(2), cwd = process.cwd()) {
   const checkGates = argv.includes("--check-gates") || execute;
   const requireStaged = argv.includes("--require-staged");
   const allowGateWarnings = argv.includes("--allow-gate-warnings");
+  const scope = getFlagValue(argv, "--scope") || (execute ? "staged" : "all");
+  if (!["staged", "all"].includes(scope)) {
+    throw new CliError(`unsupported commit scope: ${scope}`);
+  }
 
   const result = analyze(cwd);
+  Object.assign(result, scopeFields(result, scope, cwd));
   result.executed = false;
   result.gates = {};
   result.gates_passed = false;

@@ -156,6 +156,40 @@ function createFakeGateScript(filePath, payload, exitCode = 0) {
   return filePath;
 }
 
+function createPathConditionalQualityGate(filePath, failingTarget) {
+  writeFile(
+    filePath,
+    [
+      "#!/usr/bin/env node",
+      "\"use strict\";",
+      "const fs = require(\"fs\");",
+      "const target = process.argv[2] || \".\";",
+      "if (process.env.CCG_GATE_LOG) {",
+      "  fs.appendFileSync(process.env.CCG_GATE_LOG, JSON.stringify({",
+      `    script: ${JSON.stringify(path.basename(filePath))},`,
+      "    argv: process.argv.slice(2),",
+      "    cwd: process.cwd()",
+      "  }) + \"\\n\");",
+      "}",
+      `const failed = target.replace(/\\\\/g, \"/\") === ${JSON.stringify(failingTarget)};`,
+      "console.log(JSON.stringify({",
+      "  scan_path: target,",
+      "  files_scanned: 1,",
+      "  total_lines: 1,",
+      "  total_code_lines: 1,",
+      "  passed: !failed,",
+      "  error_count: failed ? 1 : 0,",
+      "  warning_count: 0,",
+      "  file_metrics: [],",
+      "  issues: failed ? [{ severity: \"error\", message: \"blocked\" }] : []",
+      "}, null, 2));",
+      "process.exit(failed ? 1 : 0);",
+      "",
+    ].join("\n")
+  );
+  return filePath;
+}
+
 function readJsonLines(filePath) {
   if (!fs.existsSync(filePath)) return [];
   return fs
@@ -1294,14 +1328,20 @@ test("fixture:spec-manager init creates .codex/ccg/specs/README.md", () => {
   );
 });
 
-test("fixture:spec-manager create creates status.json", () => {
+test("fixture:spec-manager create writes requirement.md and status schema_version", () => {
   const dir = tempDir("ccg-spec-manager-create-");
   run(node, [specManager, "init"], { cwd: dir });
   const result = run(node, [specManager, "create", "audit-log", "--requirement", "Track audit logging", "--json"], {
     cwd: dir,
   });
   const json = parseJsonOutput(result);
+  const requirementPath = path.join(dir, ".codex", "ccg", "specs", "audit-log", "requirement.md");
   assert(json.status.name === "audit-log", "expected status.json to record the spec name");
+  assert(json.status.schema_version === 1, "expected status schema_version to be recorded");
+  assert(json.status.requirement.present === true, "expected status to record requirement artifact presence");
+  assert(json.status.requirement.path === "requirement.md", "expected status to record requirement artifact path");
+  assert(fs.existsSync(requirementPath), "expected requirement.md to be created");
+  assert(fs.readFileSync(requirementPath, "utf8").includes("Track audit logging"), "expected requirement.md to preserve original requirement");
   assert(
     fs.existsSync(path.join(dir, ".codex", "ccg", "specs", "audit-log", "status.json")),
     "expected status.json to be created"
@@ -1495,6 +1535,48 @@ test("fixture:team-plan-checker allows conflict with explicit merge strategy", (
   assert(json.can_execute === true, "expected explicit merge strategy to allow execution");
 });
 
+test("fixture:team-plan-checker summarize and conflicts do not write status.json by default", () => {
+  const dir = tempDir("ccg-team-checker-readonly-");
+  const planDir = path.join(dir, ".codex", "ccg", "team", "audit-log");
+  const planFile = path.join(planDir, "plan.md");
+  const statusFile = path.join(planDir, "status.json");
+  writeFile(
+    planFile,
+    [
+      "## Workers",
+      "| Worker | Scope | Files | Constraints |",
+      "|--------|-------|-------|-------------|",
+      "| backend-1 | API | src/api/a.ts | no schema change |",
+      "",
+      "## Merge Strategy",
+      "backend-1 owns src/api/a.ts.",
+      "",
+      "## Verification Strategy",
+      "- node scripts/run-fixture-tests.js",
+      "",
+      "## Conflict Risks",
+      "Low.",
+      "",
+    ].join("\n")
+  );
+
+  const summary = parseJsonOutput(run(node, [teamPlanChecker, "summarize", planFile, "--json"], { cwd: dir }));
+  assert(summary.status_written === false, "expected summarize to be read-only by default");
+  assert(!fs.existsSync(statusFile), "expected summarize not to write status.json");
+
+  const conflicts = parseJsonOutput(run(node, [teamPlanChecker, "conflicts", planFile, "--json"], { cwd: dir }));
+  assert(conflicts.status_written === false, "expected conflicts to be read-only by default");
+  assert(!fs.existsSync(statusFile), "expected conflicts not to write status.json");
+
+  const noWrite = parseJsonOutput(run(node, [teamPlanChecker, "validate", planFile, "--json", "--no-write-status"], { cwd: dir }));
+  assert(noWrite.status_written === false, "expected validate --no-write-status to remain read-only");
+  assert(!fs.existsSync(statusFile), "expected validate --no-write-status not to write status.json");
+
+  const writeStatus = parseJsonOutput(run(node, [teamPlanChecker, "summarize", planFile, "--json", "--write-status"], { cwd: dir }));
+  assert(writeStatus.status_written === true, "expected --write-status query to write status.json");
+  assert(fs.existsSync(statusFile), "expected --write-status to create status.json");
+});
+
 test("fixture:team-plan-checker team skills require checker and status evidence", () => {
   const execSkill = fs.readFileSync(path.join(repoRoot, "plugins", "ccg", "skills", "ccg-team-exec", "SKILL.md"), "utf8");
   const reviewSkill = fs.readFileSync(path.join(repoRoot, "plugins", "ccg", "skills", "ccg-team-review", "SKILL.md"), "utf8");
@@ -1526,7 +1608,7 @@ test("fixture:rollback-confirm-exec confirm executes file restore", () => {
   const expected = run("git", ["show", "HEAD:src/app.js"], { cwd: dir }).stdout.replace(/\r\n/g, "\n");
   const result = run(
     node,
-    [rollbackHelper, "--file", "src/app.js", "--target", "HEAD", "--confirm", "--protected-branch-ok", "--json"],
+    [rollbackHelper, "--file", "src/app.js", "--target", "HEAD", "--confirm", "--protected-branch-ok", "--allow-dirty", "--json"],
     { cwd: dir }
   );
   const json = parseJsonOutput(result);
@@ -1581,6 +1663,65 @@ test("fixture:rollback-confirm-exec refuses --branch mismatch with current branc
   assert(String(json.reason || "").includes("branch mismatch"), "expected branch mismatch reason in JSON output");
   const cached = run("git", ["diff", "--cached", "--name-only"], { cwd: dir }).stdout.trim();
   assert(cached === "", "expected branch mismatch guard to avoid staged rollback changes");
+});
+
+test("fixture:rollback-confirm-exec restore refuses dirty touched file without --allow-dirty", () => {
+  const dir = initGitRepo();
+  writeFile(path.join(dir, "src", "app.js"), "console.log('dirty local work');\n");
+  const result = run(
+    node,
+    [rollbackHelper, "--file", "src/app.js", "--target", "HEAD", "--confirm", "--protected-branch-ok", "--json"],
+    { cwd: dir, allowFailure: true }
+  );
+  const json = parseJsonOutput(result);
+  const content = fs.readFileSync(path.join(dir, "src", "app.js"), "utf8");
+  assert(result.status !== 0, "expected dirty touched file refusal");
+  assert(json.blocked === true, "expected dirty touched file to block restore");
+  assert(json.dirtyTouchedFiles.some((entry) => entry.path === "src/app.js"), "expected dirty touched file in JSON output");
+  assert(content.includes("dirty local work"), "expected local dirty content to remain untouched");
+
+  const allowed = run(
+    node,
+    [rollbackHelper, "--file", "src/app.js", "--target", "HEAD", "--confirm", "--protected-branch-ok", "--allow-dirty", "--json"],
+    { cwd: dir }
+  );
+  const allowedJson = parseJsonOutput(allowed);
+  const restored = fs.readFileSync(path.join(dir, "src", "app.js"), "utf8");
+  assert(allowedJson.executed === true, "expected --allow-dirty restore execution");
+  assert(restored.includes("base"), "expected dirty file to be restored after explicit allowance");
+});
+
+test("fixture:rollback-confirm-exec revert warns on unrelated dirty files and --only-if-clean blocks them", () => {
+  const dir = initGitRepo();
+  writeFile(path.join(dir, "src", "app.js"), "console.log('updated');\n");
+  run("git", ["add", "src/app.js"], { cwd: dir });
+  run("git", ["commit", "-m", "update"], { cwd: dir });
+  const sha = run("git", ["rev-parse", "HEAD"], { cwd: dir }).stdout.trim();
+  writeFile(path.join(dir, "src", "other.js"), "console.log('unrelated dirty');\n");
+  const result = run(
+    node,
+    [rollbackHelper, "--target", sha, "--mode", "revert", "--confirm", "--protected-branch-ok", "--json"],
+    { cwd: dir }
+  );
+  const json = parseJsonOutput(result);
+  assert(json.executed === true, "expected revert to proceed with unrelated dirty file");
+  assert(json.warnings.some((warning) => warning.includes("dirty unrelated files")), "expected unrelated dirty warning");
+
+  const blockedDir = initGitRepo();
+  writeFile(path.join(blockedDir, "src", "app.js"), "console.log('updated');\n");
+  run("git", ["add", "src/app.js"], { cwd: blockedDir });
+  run("git", ["commit", "-m", "update"], { cwd: blockedDir });
+  const blockedSha = run("git", ["rev-parse", "HEAD"], { cwd: blockedDir }).stdout.trim();
+  writeFile(path.join(blockedDir, "src", "other.js"), "console.log('unrelated dirty');\n");
+  const blocked = run(
+    node,
+    [rollbackHelper, "--target", blockedSha, "--mode", "revert", "--confirm", "--protected-branch-ok", "--only-if-clean", "--json"],
+    { cwd: blockedDir, allowFailure: true }
+  );
+  const blockedJson = parseJsonOutput(blocked);
+  assert(blocked.status !== 0, "expected --only-if-clean to block dirty worktree");
+  assert(blockedJson.blocked === true, "expected only-if-clean result to be blocked");
+  assert(String(blockedJson.reason || "").includes("--only-if-clean"), "expected only-if-clean reason");
 });
 
 test("fixture:commit-gate-runner detects staged, unstaged, and untracked files", () => {
@@ -1638,6 +1779,142 @@ test("fixture:commit-gate-runner --check-gates runs verify-change", () => {
   const logs = readJsonLines(logFile);
   assert(json.gates["verify-change"].ran === true, "expected verify-change gate to run");
   assert(logs.some((entry) => entry.script === "fake-change.js"), "expected fake verify-change invocation");
+});
+
+test("fixture:commit-gate-runner --execute defaults to staged scope and ignores unrelated unstaged gate failure", () => {
+  const dir = initGitRepo();
+  const logFile = path.join(dir, "gate-log.jsonl");
+  const fakeChange = createFakeGateScript(
+    path.join(dir, "fake-change.js"),
+    {
+      passed: true,
+      total_additions: 1,
+      total_deletions: 0,
+      affected_modules: ["src"],
+      changes: [],
+      issues: [],
+    }
+  );
+  const fakeQuality = createPathConditionalQualityGate(path.join(dir, "fake-quality.js"), "src/dirty.js");
+  writeFile(path.join(dir, "src", "dirty.js"), "export const dirty = false;\n");
+  run("git", ["add", "src/dirty.js"], { cwd: dir });
+  run("git", ["commit", "-m", "add dirty fixture"], { cwd: dir });
+  writeFile(path.join(dir, "src", "staged.js"), "export const staged = true;\n");
+  writeFile(path.join(dir, "src", "dirty.js"), "export const dirty = true;\n");
+  run("git", ["add", "src/staged.js"], { cwd: dir });
+  const beforeCommitCount = Number(run("git", ["rev-list", "--count", "HEAD"], { cwd: dir }).stdout.trim());
+  const result = run(node, [commitHelper, "--execute", "--json"], {
+    cwd: dir,
+    env: {
+      CCG_VERIFY_CHANGE_SCRIPT: fakeChange,
+      CCG_VERIFY_QUALITY_SCRIPT: fakeQuality,
+      CCG_GATE_LOG: logFile,
+    },
+  });
+  const json = parseJsonOutput(result);
+  const logs = readJsonLines(logFile);
+  const commitCount = Number(run("git", ["rev-list", "--count", "HEAD"], { cwd: dir }).stdout.trim());
+  assert(json.scope === "staged", "expected execute to default to staged scope");
+  assert(json.executed === true, "expected staged-scope commit execution");
+  assert(commitCount === beforeCommitCount + 1, `expected one new commit after staged-scope execution, got ${commitCount - beforeCommitCount}`);
+  assert(json.gatedScanTargets.includes("src/staged.js"), "expected staged file to be gated");
+  assert(!json.gatedScanTargets.includes("src/dirty.js"), "expected unstaged file to be outside staged gate scope");
+  assert(json.scope_warnings.some((warning) => warning.includes("unstaged")), "expected unstaged warning");
+  assert(logs.some((entry) => entry.script === "fake-change.js" && entry.argv.includes("staged")), "expected staged verify-change mode");
+  assert(!logs.some((entry) => entry.script === "fake-quality.js" && entry.argv.includes("src/dirty.js")), "expected dirty file not to be scanned");
+});
+
+test("fixture:commit-gate-runner --check-gates defaults to all scope and catches unstaged security-sensitive paths", () => {
+  const dir = initGitRepo();
+  const fakeChange = createFakeGateScript(
+    path.join(dir, "fake-change.js"),
+    {
+      passed: true,
+      total_additions: 1,
+      total_deletions: 0,
+      affected_modules: ["src"],
+      changes: [],
+      issues: [],
+    }
+  );
+  const fakeQuality = createFakeGateScript(
+    path.join(dir, "fake-quality.js"),
+    {
+      scan_path: ".",
+      files_scanned: 1,
+      total_lines: 1,
+      total_code_lines: 1,
+      passed: true,
+      error_count: 0,
+      warning_count: 0,
+      file_metrics: [],
+      issues: [],
+    }
+  );
+  const fakeSecurity = createFakeGateScript(
+    path.join(dir, "fake-security.js"),
+    {
+      scan_path: ".",
+      files_scanned: 1,
+      passed: false,
+      counts: { critical: 0, high: 1, medium: 0, low: 0, info: 0 },
+      findings: [{ severity: "high", message: "blocked" }],
+    },
+    1
+  );
+  writeFile(path.join(dir, "src", "staged.js"), "export const staged = true;\n");
+  writeFile(path.join(dir, "src", "auth.js"), "export const authToken = 'x';\n");
+  run("git", ["add", "src/staged.js"], { cwd: dir });
+  const result = run(node, [commitHelper, "--check-gates", "--json"], {
+    cwd: dir,
+    env: {
+      CCG_VERIFY_CHANGE_SCRIPT: fakeChange,
+      CCG_VERIFY_QUALITY_SCRIPT: fakeQuality,
+      CCG_VERIFY_SECURITY_SCRIPT: fakeSecurity,
+    },
+  });
+  const json = parseJsonOutput(result);
+  assert(json.scope === "all", "expected --check-gates to default to all scope");
+  assert(json.gatedChanged.includes("src/auth.js"), "expected unstaged security path to be gated in all scope");
+  assert(json.gates["verify-security"].ran === true, "expected security gate to run for unstaged security path");
+  assert(json.canCommit === false, "expected security gate failure to block commit readiness");
+});
+
+test("fixture:commit-gate-runner --scope staged reports unstaged and untracked warnings without gating them", () => {
+  const dir = initGitRepo();
+  const fakeChange = createFakeGateScript(
+    path.join(dir, "fake-change.js"),
+    {
+      passed: true,
+      total_additions: 1,
+      total_deletions: 0,
+      affected_modules: ["src"],
+      changes: [],
+      issues: [],
+    }
+  );
+  const fakeQuality = createPathConditionalQualityGate(path.join(dir, "fake-quality.js"), "src/dirty.js");
+  writeFile(path.join(dir, "src", "dirty.js"), "export const dirty = false;\n");
+  run("git", ["add", "src/dirty.js"], { cwd: dir });
+  run("git", ["commit", "-m", "add dirty fixture"], { cwd: dir });
+  writeFile(path.join(dir, "src", "staged.js"), "export const staged = true;\n");
+  writeFile(path.join(dir, "src", "dirty.js"), "export const dirty = true;\n");
+  writeFile(path.join(dir, "src", "todo.js"), "export const todo = true;\n");
+  run("git", ["add", "src/staged.js"], { cwd: dir });
+  const result = run(node, [commitHelper, "--check-gates", "--scope", "staged", "--json"], {
+    cwd: dir,
+    env: {
+      CCG_VERIFY_CHANGE_SCRIPT: fakeChange,
+      CCG_VERIFY_QUALITY_SCRIPT: fakeQuality,
+    },
+  });
+  const json = parseJsonOutput(result);
+  assert(json.scope === "staged", "expected explicit staged scope");
+  assert(json.canCommit === true, "expected warning-only staged scope to preserve commit readiness");
+  assert(json.scope_warnings.some((warning) => warning.includes("unstaged")), "expected unstaged scope warning");
+  assert(json.scope_warnings.some((warning) => warning.includes("untracked")), "expected untracked scope warning");
+  assert(!json.gatedScanTargets.includes("src/dirty.js"), "expected unstaged file not to be gated");
+  assert(!json.gatedScanTargets.includes("src/todo.js"), "expected untracked file not to be gated");
 });
 
 test("fixture:commit-gate-runner security-sensitive path triggers verify-security", () => {
