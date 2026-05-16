@@ -14,7 +14,9 @@ The user invoked:
 
 Use the installed CCG plugin skill `ccg:gptpro-review`.
 
-Create a manual ChatGPT Pro review bridge.
+Create a Codex + Gemini + GPT Pro review bridge.
+
+Codex must run Gemini read-only review analysis through the bundled preview helper before generating the GPT Pro manual prompt. The GPT Pro prompt must include the Gemini response file path and a concise Gemini findings summary.
 
 Expected manual ChatGPT Pro questions: 1.
 Maximum manual ChatGPT Pro questions: 2.

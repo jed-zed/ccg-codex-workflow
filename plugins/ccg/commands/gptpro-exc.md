@@ -14,7 +14,9 @@ The user invoked:
 
 Use the installed CCG plugin skill `ccg:gptpro-exc`.
 
-Generate a manual ChatGPT Pro helper prompt for implementation sketches, patch proposals, edge cases, or test ideas.
+Generate a Codex + Gemini + GPT Pro helper prompt for implementation sketches, patch proposals, edge cases, or test ideas.
+
+Codex must run Gemini read-only execution-companion analysis through the bundled preview helper before generating the GPT Pro manual prompt. The GPT Pro prompt must include the Gemini response file path and a concise Gemini findings summary.
 
 Expected manual ChatGPT Pro questions: 1.
 Maximum manual ChatGPT Pro questions: 2.

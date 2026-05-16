@@ -1146,6 +1146,10 @@ test("fixture:gptpro commands, skills, templates, doctor, and bridge coverage ex
 
   for (const skill of ["ccg-gptpro-plan", "ccg-gptpro-review", "ccg-gptpro-exc", "ccg-gptpro-bridge"]) {
     const skillText = fs.readFileSync(path.join(repoRoot, "plugins", "ccg", "skills", skill, "SKILL.md"), "utf8");
+    assert(skillText.includes("Codex + Gemini + GPT Pro"), `expected ${skill} to define tri-model workflow`);
+    assert(skillText.includes("Run Gemini before GPT Pro"), `expected ${skill} to require Gemini before GPT Pro`);
+    assert(skillText.includes("bundled Gemini preview helper"), `expected ${skill} to use bundled Gemini helper`);
+    assert(skillText.includes("synthesize Codex, Gemini, and GPT Pro"), `expected ${skill} to synthesize all models`);
     assert(skillText.includes("Do not read ChatGPT web DOM"), `expected ${skill} to forbid DOM reading`);
     assert(skillText.includes("Expected manual questions: 1"), `expected ${skill} to document expected budget`);
     assert(skillText.includes("Maximum manual questions: 2"), `expected ${skill} to document maximum budget`);
@@ -1158,6 +1162,22 @@ test("fixture:gptpro commands, skills, templates, doctor, and bridge coverage ex
     assert(skillText.includes("response_saved=true"), `expected ${skill} to require saved response before continuing`);
     assert(skillText.includes("response.md is non-empty"), `expected ${skill} to require non-empty response`);
   }
+  const planCommandText = fs.readFileSync(
+    path.join(repoRoot, "plugins", "ccg", "commands", "gptpro-plan.md"),
+    "utf8"
+  );
+  const planSkillText = fs.readFileSync(
+    path.join(repoRoot, "plugins", "ccg", "skills", "ccg-gptpro-plan", "SKILL.md"),
+    "utf8"
+  );
+  assert(planCommandText.includes("Plan-only Boundary"), "expected gptpro-plan command to define plan-only boundary");
+  assert(planSkillText.includes("Plan-only Boundary"), "expected gptpro-plan skill to define plan-only boundary");
+  assert(planSkillText.includes("Do not execute implementation"), "expected gptpro-plan to forbid implementation execution");
+  assert(planSkillText.includes("Do not apply code changes"), "expected gptpro-plan to forbid code edits");
+  assert(
+    planSkillText.includes("Stop after producing or updating the plan"),
+    "expected gptpro-plan to stop after planning"
+  );
 
   for (const template of ["base", "plan", "review", "exc", "followup"]) {
     assert(
@@ -1175,6 +1195,18 @@ test("fixture:gptpro commands, skills, templates, doctor, and bridge coverage ex
       ),
       `expected GPT Pro template: ${template}.md`
     );
+  }
+  const baseTemplate = fs.readFileSync(
+    path.join(repoRoot, "plugins", "ccg", "skills", "ccg-gptpro-bridge", "templates", "gptpro", "base.md"),
+    "utf8"
+  );
+  assert(baseTemplate.includes("Codex + Gemini + GPT Pro"), "expected GPT Pro base template to describe tri-model workflow");
+  for (const template of ["plan", "review", "exc"]) {
+    const templateText = fs.readFileSync(
+      path.join(repoRoot, "plugins", "ccg", "skills", "ccg-gptpro-bridge", "templates", "gptpro", `${template}.md`),
+      "utf8"
+    );
+    assert(templateText.includes("Gemini findings"), `expected GPT Pro ${template} template to compare Gemini findings`);
   }
   assert(docs.includes("No DOM extraction"), "expected docs to explain DOM boundary");
   assert(doctor.includes("GPT Pro manual bridge"), "expected doctor summary");

@@ -5,7 +5,9 @@ description: Shared manual ChatGPT Pro bridge for CCG planning, review, and exec
 
 # CCG GPT Pro Manual Bridge
 
-This manual bridge lets the user manually ask ChatGPT Pro for second-opinion planning, review, or execution-companion analysis.
+This manual bridge lets the user manually ask ChatGPT Pro inside a Codex + Gemini + GPT Pro CCG workflow.
+
+Codex remains final owner. Gemini provides automatic read-only helper analysis through the bundled Gemini preview helper. GPT Pro provides a user-mediated manual second opinion.
 
 ## Hard Boundaries
 
@@ -27,6 +29,16 @@ Each GPT Pro bridge command is designed to complete in one manual ChatGPT Pro qu
 - Maximum manual questions: 2.
 - Round 2 only for blocker re-check, revised plan comparison, applied diff review, or high-risk follow-up.
 - More than two manual questions means the task should be decomposed or returned to Codex-native CCG workflows.
+
+## Tri-model Order
+
+Run Gemini before GPT Pro.
+
+- Gather the task, local context, relevant diff or plan evidence, and Codex's preliminary analysis.
+- Use the bundled Gemini preview helper before creating the GPT Pro prompt.
+- Include the Gemini response file path and a concise Gemini findings summary in the GPT Pro prompt input.
+- After the user saves GPT Pro output, synthesize Codex, Gemini, and GPT Pro findings in Chinese.
+- Gemini and GPT Pro remain helper evidence only; Codex makes the final decision.
 
 ## Workflow
 

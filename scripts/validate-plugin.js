@@ -195,9 +195,16 @@ function validateGptProManualBridge() {
     "Codex remains final owner",
     "Expected manual questions: 1",
     "Maximum manual questions: 2",
+    "Codex + Gemini + GPT Pro",
+    "Run Gemini before GPT Pro",
+    "bundled Gemini preview helper",
+    "synthesize Codex, Gemini, and GPT Pro",
     "Manual Handoff Barrier",
     "display the full generated prompt",
     "End the current assistant turn",
+    "Plan-only Boundary",
+    "Do not execute implementation",
+    "Do not apply code changes",
     "response_saved=true",
     "response.md is non-empty",
     "web_automation",
@@ -223,6 +230,23 @@ function validateGptProManualBridge() {
     "webbrowser.open(\"https://chatgpt.com/\")",
   ]) {
     if (!script.includes(phrase)) fail(`gptpro_bridge.py is missing behavior phrase: ${phrase}`);
+  }
+
+  const baseTemplate = fs.readFileSync(
+    path.join(repoRoot, "plugins/ccg/skills/ccg-gptpro-bridge/templates/gptpro/base.md"),
+    "utf8"
+  );
+  if (!baseTemplate.includes("Codex + Gemini + GPT Pro")) {
+    fail("GPT Pro base template must describe the tri-model workflow");
+  }
+  for (const template of ["plan", "review", "exc"]) {
+    const templateText = fs.readFileSync(
+      path.join(repoRoot, `plugins/ccg/skills/ccg-gptpro-bridge/templates/gptpro/${template}.md`),
+      "utf8"
+    );
+    if (!templateText.includes("Gemini findings")) {
+      fail(`GPT Pro ${template} template must ask GPT Pro to compare Gemini findings`);
+    }
   }
 
   const ccgCommand = fs.readFileSync(path.join(repoRoot, "plugins/ccg/commands/ccg.md"), "utf8");

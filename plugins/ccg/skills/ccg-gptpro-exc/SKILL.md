@@ -7,9 +7,13 @@ description: Create a manual ChatGPT Pro execution-companion bridge. Use when th
 
 Load and follow `skills/ccg-gptpro-bridge/SKILL.md`.
 
+This is a Codex + Gemini + GPT Pro execution-companion workflow.
+
 ## Behavior
 
 - Treat input as an implementation companion request.
+- Run Gemini before GPT Pro using the bundled Gemini preview helper with `--prompt-template general`.
+- Include Codex's implementation context, the Gemini response file path, and a concise Gemini findings summary in the GPT Pro prompt.
 - Provide context: task, plan excerpt, target files, constraints, existing patterns.
 - Expected manual questions: 1.
 - Maximum manual questions: 2.
@@ -17,7 +21,7 @@ Load and follow `skills/ccg-gptpro-bridge/SKILL.md`.
 - Use `scripts/gptpro_bridge.py --mode exc --detach-preview --open-preview --print-prompt`.
 - GPT Pro output is a sketch, pseudo patch, test idea list, or edge-case review.
 - Codex owns all file edits and verification.
-- Report in Chinese.
+- Report in Chinese and synthesize Codex, Gemini, and GPT Pro findings.
 - Codex remains final owner.
 - Do not automate ChatGPT web login.
 - Do not read ChatGPT web DOM.

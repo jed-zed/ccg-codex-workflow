@@ -81,21 +81,21 @@ The original project is Claude-led: Claude Code orchestrates Codex and Gemini. T
 | `/ccg:team-plan` | done | `/ccg:team-plan` | Codex consolidates WBS and ownership. |
 | `/ccg:team-exec` | done | `/ccg:team-exec` | Workers execute scoped file/module ownership. |
 | `/ccg:team-review` | done | `/ccg:team-review` | Codex primary review plus optional Gemini second pass. |
-| `/ccg:gptpro-plan` | done | `/ccg:gptpro-plan` | Additional Codex-native assistance path for manual ChatGPT Pro planning second opinion. |
-| `/ccg:gptpro-review` | done | `/ccg:gptpro-review` | Additional Codex-native assistance path for manual ChatGPT Pro review second opinion. |
-| `/ccg:gptpro-exc` | done | `/ccg:gptpro-exc` | Additional Codex-native assistance path for manual ChatGPT Pro execution-companion advice. |
+| `/ccg:gptpro-plan` | done | `/ccg:gptpro-plan` | Codex + Gemini + GPT Pro planning-only workflow with manual GPT Pro handoff. |
+| `/ccg:gptpro-review` | done | `/ccg:gptpro-review` | Codex + Gemini + GPT Pro review workflow with manual GPT Pro handoff. |
+| `/ccg:gptpro-exc` | done | `/ccg:gptpro-exc` | Codex + Gemini + GPT Pro execution-companion workflow with manual GPT Pro handoff. |
 | Claude `codeagent-wrapper` | not-copied | `invoke_gemini_preview.py` | Replaced by bounded Gemini preview helper; no Claude quota or session resume. |
 | Claude `SESSION_ID` resume | not-copied | Fresh Codex context search | Legacy session IDs are provenance only. |
 
 ## Additional Codex-native Assistance Paths
 
-CCG also supports a GPT Pro manual bridge. This is not ChatGPT web automation and is not a replacement for Codex ownership:
+CCG also supports a GPT Pro manual bridge. These commands are Codex + Gemini + GPT Pro workflows, not ChatGPT web automation and not a replacement for Codex ownership:
 
-- `/ccg:gptpro-plan` - manual ChatGPT Pro planning second opinion.
-- `/ccg:gptpro-review` - manual ChatGPT Pro review second opinion.
-- `/ccg:gptpro-exc` - manual ChatGPT Pro execution companion.
+- `/ccg:gptpro-plan` - Codex + Gemini + GPT Pro planning-only workflow.
+- `/ccg:gptpro-review` - Codex + Gemini + GPT Pro review workflow.
+- `/ccg:gptpro-exc` - Codex + Gemini + GPT Pro execution companion.
 
-The user manually copies prompts into ChatGPT Pro and manually saves responses into `.codex/ccg/gptpro/**`. Codex remains the final planner, executor, reviewer, and verifier.
+Codex runs Gemini through the bundled preview helper first, then the user manually copies prompts into ChatGPT Pro and manually saves responses into `.codex/ccg/gptpro/**`. Codex remains the final planner, executor, reviewer, and verifier.
 
 ## Behavioral Depth Coverage
 

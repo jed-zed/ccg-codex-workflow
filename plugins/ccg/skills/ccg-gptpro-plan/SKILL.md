@@ -5,22 +5,37 @@ description: Create a manual ChatGPT Pro planning second-opinion bridge. Use whe
 
 # CCG GPT Pro Plan
 
+This is a Codex + Gemini + GPT Pro planning workflow.
+
 Load and follow `skills/ccg-gptpro-bridge/SKILL.md`.
 
 ## Behavior
 
 - Treat the argument as a planning task or plan-review input.
+- Run Gemini before GPT Pro using the bundled Gemini preview helper with `--prompt-template plan`.
+- Include Codex's planning context, the Gemini response file path, and a concise Gemini findings summary in the GPT Pro prompt.
 - Build a single-round planning prompt by default.
 - Expected manual questions: 1.
 - Maximum manual questions: 2.
 - Round 2 only for blocker re-check or revised plan comparison.
 - Use `scripts/gptpro_bridge.py --mode plan --detach-preview --open-preview --print-prompt`.
 - Read the saved response file only after the user manually saves it.
-- Summarize GPT Pro findings in Chinese.
+- Summarize and synthesize Codex, Gemini, and GPT Pro findings in Chinese.
 - Codex remains final owner.
 - Do not automate ChatGPT web login.
 - Do not read ChatGPT web DOM.
 - Do not extract ChatGPT Output programmatically.
+
+## Plan-only Boundary
+
+- `/ccg:gptpro-plan` is planning-only.
+- Do not execute implementation.
+- Do not apply code changes except writing or updating CCG plan artifacts and GPT Pro bridge artifacts.
+- Do not run implementation tasks, mutate product code, commit, push, create a pull request, or continue into `/ccg:execute` behavior.
+- After the user saves GPT Pro output, synthesize Codex, Gemini, and GPT Pro planning findings only.
+- Produce or revise the plan, report the plan location and key decisions in Chinese, then stop.
+- Stop after producing or updating the plan.
+- If the user wants execution, require a separate `/ccg:execute <plan>` or `/ccg:codex-exec <plan>` request.
 
 ## Manual Handoff Barrier
 

@@ -2,6 +2,8 @@
 
 Provide read-only implementation companion advice.
 
+The input should include Codex's implementation context and any available Gemini findings. Compare them, call out disagreements, and help Codex choose the final implementation path.
+
 ## Expected Output
 
 Choose the relevant sections:
