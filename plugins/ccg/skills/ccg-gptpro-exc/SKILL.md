@@ -19,7 +19,7 @@ This is a Codex + Gemini + GPT Pro execution-companion workflow.
 - Expected manual questions: 1.
 - Maximum manual questions: 2.
 - Round 2 should be converted into `/ccg:gptpro-review` whenever possible.
-- Use `scripts/gptpro_bridge.py --mode exc --detach-preview --open-preview --print-prompt`.
+- Use `scripts/gptpro_bridge.py --mode exc --detach-preview --open-preview`.
 - GPT Pro output is a sketch, pseudo patch, test idea list, or edge-case review.
 - Codex owns all file edits and verification.
 - Report in Chinese and synthesize Codex, Gemini, and GPT Pro findings.
@@ -30,8 +30,9 @@ This is a Codex + Gemini + GPT Pro execution-companion workflow.
 
 ## Manual Handoff Barrier
 
-- After creating the bridge artifacts, display the full generated prompt exactly as printed by the helper.
+- After creating the bridge artifacts, show only handoff metadata.
+- Do not paste the full generated prompt into chat.
 - Show the preview URL, session directory, prompt file path, response file path, and status file path.
-- Tell the user to manually submit the prompt to ChatGPT Pro and manually save the response.
+- Tell the user to open the preview page and use the preview page Copy Prompt button, then manually submit the prompt to ChatGPT Pro and manually save the response.
 - End the current assistant turn after the handoff. Do not continue the execution-companion analysis in the same turn.
 - Continue only after `status.json` shows `response_saved=true` and `response.md is non-empty`.

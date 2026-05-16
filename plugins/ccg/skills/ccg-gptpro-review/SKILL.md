@@ -19,7 +19,7 @@ Load and follow `skills/ccg-gptpro-bridge/SKILL.md`.
 - Expected manual questions: 1.
 - Maximum manual questions: 2.
 - Round 2 only after Codex fixes blocker findings.
-- Use `scripts/gptpro_bridge.py --mode review --detach-preview --open-preview --print-prompt`.
+- Use `scripts/gptpro_bridge.py --mode review --detach-preview --open-preview`.
 - After response is saved, classify:
   - blocking findings
   - non-blocking findings
@@ -33,8 +33,9 @@ Load and follow `skills/ccg-gptpro-bridge/SKILL.md`.
 
 ## Manual Handoff Barrier
 
-- After creating the bridge artifacts, display the full generated prompt exactly as printed by the helper.
+- After creating the bridge artifacts, show only handoff metadata.
+- Do not paste the full generated prompt into chat.
 - Show the preview URL, session directory, prompt file path, response file path, and status file path.
-- Tell the user to manually submit the prompt to ChatGPT Pro and manually save the response.
+- Tell the user to open the preview page and use the preview page Copy Prompt button, then manually submit the prompt to ChatGPT Pro and manually save the response.
 - End the current assistant turn after the handoff. Do not continue the review analysis in the same turn.
 - Continue only after `status.json` shows `response_saved=true` and `response.md is non-empty`.

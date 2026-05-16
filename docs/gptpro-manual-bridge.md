@@ -55,9 +55,10 @@ Default one question.
 
 After Codex creates a GPT Pro bridge session, it must pause for user-mediated ChatGPT Pro work.
 
-- Codex must display the full generated prompt in the chat.
+- Codex must not paste the full generated prompt into chat during normal handoffs.
 - Codex must show the preview URL, session directory, prompt file path, response file path, and status file path.
 - The preview page should be served by a detached local helper so Codex can end the current turn while the page remains available.
+- The user opens the preview page and uses the preview page Copy Prompt button, or opens `prompt.md` if the browser copy button fails.
 - The user manually submits the prompt to ChatGPT Pro and manually saves the output in the local bridge page or `response.md`.
 - Codex must end the current assistant turn after the handoff instructions.
 - Codex may continue only after `status.json` shows `response_saved=true` and `response.md is non-empty`.

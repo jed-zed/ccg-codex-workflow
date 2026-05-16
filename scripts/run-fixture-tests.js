@@ -1162,7 +1162,11 @@ test("fixture:gptpro commands, skills, templates, doctor, and bridge coverage ex
     assert(skillText.includes("Expected manual questions: 1"), `expected ${skill} to document expected budget`);
     assert(skillText.includes("Maximum manual questions: 2"), `expected ${skill} to document maximum budget`);
     assert(skillText.includes("Manual Handoff Barrier"), `expected ${skill} to define manual handoff barrier`);
-    assert(skillText.includes("display the full generated prompt"), `expected ${skill} to require full prompt display`);
+    assert(
+      skillText.includes("Do not paste the full generated prompt into chat"),
+      `expected ${skill} to avoid pasting full prompts in chat`
+    );
+    assert(skillText.includes("preview page Copy Prompt"), `expected ${skill} to direct users to preview copy`);
     assert(
       skillText.includes("End the current assistant turn"),
       `expected ${skill} to stop after manual handoff`
@@ -1186,6 +1190,26 @@ test("fixture:gptpro commands, skills, templates, doctor, and bridge coverage ex
     planSkillText.includes("Stop after producing or updating the plan"),
     "expected gptpro-plan to stop after planning"
   );
+  for (const [mode, commandText] of [
+    ["plan", planSkillText],
+    [
+      "review",
+      fs.readFileSync(path.join(repoRoot, "plugins", "ccg", "skills", "ccg-gptpro-review", "SKILL.md"), "utf8"),
+    ],
+    [
+      "exc",
+      fs.readFileSync(path.join(repoRoot, "plugins", "ccg", "skills", "ccg-gptpro-exc", "SKILL.md"), "utf8"),
+    ],
+  ]) {
+    assert(
+      commandText.includes(`scripts/gptpro_bridge.py --mode ${mode} --detach-preview --open-preview`),
+      `expected ${mode} GPT Pro handoff to use preview without printing prompt in chat`
+    );
+    assert(
+      !commandText.includes(`scripts/gptpro_bridge.py --mode ${mode} --detach-preview --open-preview --print-prompt`),
+      `expected ${mode} GPT Pro handoff to omit --print-prompt by default`
+    );
+  }
 
   for (const template of ["base", "plan", "review", "exc", "followup"]) {
     assert(
