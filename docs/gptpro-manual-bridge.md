@@ -28,6 +28,23 @@ Before creating a GPT Pro manual prompt, Codex must have:
 
 If Gemini fails, does not produce a response file, or writes an empty response, stop in Chinese and do not create a GPT Pro bridge session. Do not invent Gemini findings.
 
+The helper enforces this with:
+
+```text
+--gemini-response-file <CCG_GEMINI_RESPONSE_FILE>
+--gemini-summary-file <summary-file>
+```
+
+For short diagnostics or fixtures, `--gemini-summary "<summary>"` may be used instead of a summary file.
+
+The helper injects Gemini Gate Evidence into `prompt.md` and records auditable provenance in `status.json`:
+
+- `response_file`
+- `response_non_empty`
+- `response_chars`
+- `response_sha256`
+- `summary`
+
 ## Hard Boundaries
 
 - Do not automate ChatGPT web login.

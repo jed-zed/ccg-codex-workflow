@@ -300,6 +300,8 @@ For these commands, Codex first runs Gemini read-only analysis through the bundl
 
 Gemini Gate Before GPT Pro: Codex must read a real `CCG_GEMINI_RESPONSE_FILE` containing a non-empty Gemini response before creating any GPT Pro manual prompt. If Gemini fails, produces no response file, or writes an empty response, Codex stops in Chinese, does not create a GPT Pro bridge session, and must not invent Gemini findings.
 
+The helper enforces this gate with `--gemini-response-file <CCG_GEMINI_RESPONSE_FILE>` and `--gemini-summary-file <summary-file>` (or `--gemini-summary` for short diagnostics). It injects Gemini Gate Evidence into `prompt.md` and records `response_file`, `response_non_empty`, `response_chars`, `response_sha256`, and `summary` in `status.json`.
+
 `/ccg:gptpro-plan` has a Plan-only Boundary: it may produce or revise a plan, but must not execute implementation, apply product-code changes, commit, push, or create a pull request. Execution requires a later explicit `/ccg:execute <plan>` or `/ccg:codex-exec <plan>` request.
 
 The bridge writes local prompt and response files under `.codex/ccg/gptpro/`. After generating a prompt, Codex must pause at a manual handoff barrier: it does not paste the full generated prompt into chat, prints the preview URL and local artifact paths, tells the user to open the preview page and use the preview page Copy Prompt button, and stops the current turn. The preview page is served by a detached local helper so the user can manually paste the prompt into ChatGPT Pro and manually paste the response back into the local bridge page or response file.

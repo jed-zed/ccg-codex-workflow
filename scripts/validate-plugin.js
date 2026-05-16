@@ -201,7 +201,7 @@ function validateGptProManualBridge() {
     "CCG_GEMINI_RESPONSE_FILE",
     "non-empty Gemini response",
     "do not create a GPT Pro bridge session",
-    "Do not invent Gemini findings",
+    "do not invent Gemini findings",
     "bundled Gemini preview helper",
     "synthesize Codex, Gemini, and GPT Pro",
     "Manual Handoff Barrier",
@@ -233,6 +233,11 @@ function validateGptProManualBridge() {
     "CCG_GPTPRO_PROMPT_BEGIN",
     "CCG_GPTPRO_PROMPT_END",
     "detach-preview",
+    "--gemini-response-file",
+    "--gemini-summary-file",
+    "read_gemini_gate",
+    "response_sha256",
+    "Gemini Gate Evidence",
     "webbrowser.open(\"https://chatgpt.com/\")",
   ]) {
     if (!script.includes(phrase)) fail(`gptpro_bridge.py is missing behavior phrase: ${phrase}`);

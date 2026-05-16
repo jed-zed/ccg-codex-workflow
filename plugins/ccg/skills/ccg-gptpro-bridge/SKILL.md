@@ -49,7 +49,16 @@ Before creating a GPT Pro manual prompt, Codex must have:
 - a non-empty Gemini response read from that file;
 - a concise Gemini findings summary derived from that response file.
 
-If Gemini fails, does not produce a response file, or writes an empty response, stop in Chinese and do not create a GPT Pro bridge session. Do not invent Gemini findings.
+If Gemini fails, does not produce a response file, or writes an empty response, stop in Chinese and do not create a GPT Pro bridge session, and do not invent Gemini findings.
+
+Use the helper-level gate arguments for every new GPT Pro session:
+
+```text
+--gemini-response-file <CCG_GEMINI_RESPONSE_FILE>
+--gemini-summary-file <file-with-concise-summary>
+```
+
+Use `--gemini-summary "<summary>"` only for short diagnostic or fixture calls. The helper injects Gemini Gate Evidence into `prompt.md` and records `response_file`, `response_non_empty`, `response_chars`, `response_sha256`, and `summary` under `status.json` as auditable provenance.
 
 ## Workflow
 
@@ -68,7 +77,8 @@ If Gemini fails, does not produce a response file, or writes an empty response, 
 
 After creating a GPT Pro bridge session, Codex must stop at a manual handoff barrier.
 
-- Run `scripts/gptpro_bridge.py` with `--detach-preview --open-preview` for round 1 and follow-up sessions.
+- Run `scripts/gptpro_bridge.py` with `--detach-preview --open-preview --gemini-response-file <CCG_GEMINI_RESPONSE_FILE> --gemini-summary-file <summary-file>` for round 1 sessions.
+- Follow-up sessions may pass fresh Gemini evidence with the same arguments, or inherit the existing `gemini_gate` provenance from round 1.
 - Do not paste the full generated prompt into chat during normal handoffs.
 - Show the preview URL, session directory, prompt file path, response file path, and status file path.
 - Tell the user to open the preview page and use the preview page Copy Prompt button, or open `prompt.md` if the browser copy button fails.

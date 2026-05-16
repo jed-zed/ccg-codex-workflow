@@ -13,13 +13,13 @@ This is a Codex + Gemini + GPT Pro execution-companion workflow.
 
 - Treat input as an implementation companion request.
 - Run Gemini before GPT Pro using the bundled Gemini preview helper with `--prompt-template general`.
-- Follow the Gemini Gate Before GPT Pro from `skills/ccg-gptpro-bridge/SKILL.md`: require a real `CCG_GEMINI_RESPONSE_FILE`, read a non-empty Gemini response from it, stop and do not create a GPT Pro bridge session if it is missing or empty, and Do not invent Gemini findings.
+- Follow the Gemini Gate Before GPT Pro from `skills/ccg-gptpro-bridge/SKILL.md`: require a real `CCG_GEMINI_RESPONSE_FILE`, read a non-empty Gemini response from it, stop and do not create a GPT Pro bridge session if it is missing or empty, and do not invent Gemini findings.
 - Include Codex's implementation context, the Gemini response file path, and a concise Gemini findings summary in the GPT Pro prompt.
 - Provide context: task, plan excerpt, target files, constraints, existing patterns.
 - Expected manual questions: 1.
 - Maximum manual questions: 2.
 - Round 2 should be converted into `/ccg:gptpro-review` whenever possible.
-- Use `scripts/gptpro_bridge.py --mode exc --detach-preview --open-preview`.
+- Use `scripts/gptpro_bridge.py --mode exc --detach-preview --open-preview --gemini-response-file <CCG_GEMINI_RESPONSE_FILE> --gemini-summary-file <summary-file>`.
 - GPT Pro output is a sketch, pseudo patch, test idea list, or edge-case review.
 - Codex owns all file edits and verification.
 - Report in Chinese and synthesize Codex, Gemini, and GPT Pro findings.

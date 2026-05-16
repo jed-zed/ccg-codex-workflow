@@ -46,6 +46,18 @@ function writeFile(filePath, content) {
   fs.writeFileSync(filePath, content, "utf8");
 }
 
+function createGeminiGateFixture(root, content = "Gemini read-only findings.", summary = "Gemini summary.") {
+  const responseFile = path.join(root, "gemini-response.md");
+  const summaryFile = path.join(root, "gemini-summary.md");
+  writeFile(responseFile, content);
+  writeFile(summaryFile, summary);
+  return {
+    responseFile,
+    summaryFile,
+    args: ["--gemini-response-file", responseFile, "--gemini-summary-file", summaryFile],
+  };
+}
+
 function createDirectoryLink(linkPath, targetPath) {
   fs.mkdirSync(path.dirname(linkPath), { recursive: true });
   if (process.platform === "win32") {
@@ -792,6 +804,7 @@ print("PREVIEW_HOLD=" + str(module.effective_hold_seconds(args)))
 test("fixture:gptpro-bridge creates prompt, response, and status artifacts", () => {
   const dir = tempDir("ccg-gptpro-artifacts-");
   const outputRoot = path.join(dir, ".codex", "ccg", "gptpro");
+  const gemini = createGeminiGateFixture(dir, "Gemini says preserve manual boundaries.", "Preserve manual boundaries.");
   const result = run(python, [
     gptproBridge,
     "--mode",
@@ -804,6 +817,7 @@ test("fixture:gptpro-bridge creates prompt, response, and status artifacts", () 
     "audit-log",
     "--output-root",
     outputRoot,
+    ...gemini.args,
     "--hold-seconds",
     "0",
   ]);
@@ -828,14 +842,88 @@ test("fixture:gptpro-bridge creates prompt, response, and status artifacts", () 
   assert(status.web_automation === false, "expected web_automation=false");
   assert(status.dom_extraction === false, "expected dom_extraction=false");
   assert(status.manual_copy_required === true, "expected manual_copy_required=true");
+  assert(status.gemini_gate.required === true, "expected Gemini gate to be required");
+  assert(status.gemini_gate.response_non_empty === true, "expected non-empty Gemini response");
+  assert(status.gemini_gate.response_sha256, "expected Gemini response hash");
+  assert(status.gemini_gate.summary === "Preserve manual boundaries.", "expected Gemini summary");
   assert(status.rounds["round-1"].response_saved === false, "expected unsaved response initially");
-  assert(fs.readFileSync(promptPath, "utf8").includes("Plan an audit log bridge."), "expected prompt text");
+  const prompt = fs.readFileSync(promptPath, "utf8");
+  assert(prompt.includes("Plan an audit log bridge."), "expected prompt text");
+  assert(prompt.includes("## Gemini Gate Evidence"), "expected Gemini evidence section");
+  assert(prompt.includes("Preserve manual boundaries."), "expected Gemini summary in prompt");
+});
+
+test("fixture:gptpro-bridge refuses missing Gemini response file", () => {
+  const dir = tempDir("ccg-gptpro-missing-gemini-");
+  const outputRoot = path.join(dir, ".codex", "ccg", "gptpro");
+  const result = run(
+    python,
+    [
+      gptproBridge,
+      "--mode",
+      "plan",
+      "--workdir",
+      dir,
+      "--prompt",
+      "Plan this task.",
+      "--slug",
+      "missing-gemini",
+      "--output-root",
+      outputRoot,
+      "--hold-seconds",
+      "0",
+    ],
+    { allowFailure: true }
+  );
+  assert(result.status !== 0, "expected missing Gemini gate to fail");
+  assert(
+    (result.stderr + result.stdout).includes("CCG_GEMINI_RESPONSE_FILE"),
+    `expected Gemini gate error:\n${result.stdout}\n${result.stderr}`
+  );
+  assert(!fs.existsSync(outputRoot), "did not expect session artifacts without Gemini gate");
+});
+
+test("fixture:gptpro-bridge refuses empty Gemini response file", () => {
+  const dir = tempDir("ccg-gptpro-empty-gemini-");
+  const outputRoot = path.join(dir, ".codex", "ccg", "gptpro");
+  const responseFile = path.join(dir, "empty-gemini.md");
+  writeFile(responseFile, "  \n\t ");
+  const result = run(
+    python,
+    [
+      gptproBridge,
+      "--mode",
+      "review",
+      "--workdir",
+      dir,
+      "--prompt",
+      "Review this task.",
+      "--slug",
+      "empty-gemini",
+      "--output-root",
+      outputRoot,
+      "--gemini-response-file",
+      responseFile,
+      "--gemini-summary",
+      "Gemini found risks.",
+      "--hold-seconds",
+      "0",
+    ],
+    { allowFailure: true }
+  );
+  assert(result.status !== 0, "expected empty Gemini response to fail");
+  assert(
+    (result.stderr + result.stdout).includes("Gemini response file is empty"),
+    `expected empty Gemini response error:\n${result.stdout}\n${result.stderr}`
+  );
+  assert(!fs.existsSync(outputRoot), "did not expect session artifacts with empty Gemini response");
 });
 
 test("fixture:gptpro-bridge prints full manual prompt when requested", () => {
   const dir = tempDir("ccg-gptpro-print-prompt-");
   const outputRoot = path.join(dir, ".codex", "ccg", "gptpro");
   const promptText = "Plan a handoff barrier. Include exact prompt display.";
+  const gemini = createGeminiGateFixture(dir);
   const result = run(python, [
     gptproBridge,
     "--mode",
@@ -848,6 +936,7 @@ test("fixture:gptpro-bridge prints full manual prompt when requested", () => {
     "handoff-barrier",
     "--output-root",
     outputRoot,
+    ...gemini.args,
     "--hold-seconds",
     "0",
     "--print-prompt",
@@ -864,6 +953,7 @@ test("fixture:gptpro-bridge prints full manual prompt when requested", () => {
 test("fixture:gptpro-bridge detached preview remains usable after command exits", () => {
   const dir = tempDir("ccg-gptpro-detached-preview-");
   const outputRoot = path.join(dir, ".codex", "ccg", "gptpro");
+  const gemini = createGeminiGateFixture(dir);
   const result = run(python, [
     gptproBridge,
     "--mode",
@@ -876,6 +966,7 @@ test("fixture:gptpro-bridge detached preview remains usable after command exits"
     "detached-preview",
     "--output-root",
     outputRoot,
+    ...gemini.args,
     "--detach-preview",
     "--print-prompt",
   ]);
@@ -924,6 +1015,8 @@ root = pathlib.Path(sys.argv[2])
 spec = importlib.util.spec_from_file_location("gptpro_bridge", script)
 module = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(module)
+gemini_file = root / "gemini-response.md"
+gemini_file.write_text("Gemini reviewed local save.", encoding="utf-8")
 session = module.create_session(
     mode="review",
     workdir=root,
@@ -933,6 +1026,7 @@ session = module.create_session(
     round_number=1,
     followup_session=None,
     followup_reason=None,
+    gemini_gate=module.read_gemini_gate(root, str(gemini_file), "Gemini save summary."),
 )
 server, url = module.start_server(session, open_browser=False)
 try:
@@ -971,6 +1065,8 @@ root = pathlib.Path(sys.argv[2])
 spec = importlib.util.spec_from_file_location("gptpro_bridge", script)
 module = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(module)
+gemini_file = root / "gemini-response.md"
+gemini_file.write_text("Gemini reviewed empty response handling.", encoding="utf-8")
 session = module.create_session(
     mode="review",
     workdir=root,
@@ -980,6 +1076,7 @@ session = module.create_session(
     round_number=1,
     followup_session=None,
     followup_reason=None,
+    gemini_gate=module.read_gemini_gate(root, str(gemini_file), "Gemini empty response summary."),
 )
 server, url = module.start_server(session, open_browser=False)
 try:
@@ -1016,6 +1113,7 @@ finally:
 test("fixture:gptpro-bridge followup creates round-2 only and rejects round > 2", () => {
   const dir = tempDir("ccg-gptpro-followup-");
   const outputRoot = path.join(dir, ".codex", "ccg", "gptpro");
+  const gemini = createGeminiGateFixture(dir);
   const first = run(python, [
     gptproBridge,
     "--mode",
@@ -1028,6 +1126,7 @@ test("fixture:gptpro-bridge followup creates round-2 only and rejects round > 2"
     "followup",
     "--output-root",
     outputRoot,
+    ...gemini.args,
     "--hold-seconds",
     "0",
   ]);
@@ -1155,7 +1254,7 @@ test("fixture:gptpro commands, skills, templates, doctor, and bridge coverage ex
       skillText.includes("do not create a GPT Pro bridge session"),
       `expected ${skill} to stop before GPT Pro session when Gemini fails`
     );
-    assert(skillText.includes("Do not invent Gemini findings"), `expected ${skill} to forbid fake Gemini summaries`);
+    assert(skillText.includes("do not invent Gemini findings"), `expected ${skill} to forbid fake Gemini summaries`);
     assert(skillText.includes("bundled Gemini preview helper"), `expected ${skill} to use bundled Gemini helper`);
     assert(skillText.includes("synthesize Codex, Gemini, and GPT Pro"), `expected ${skill} to synthesize all models`);
     assert(skillText.includes("Do not read ChatGPT web DOM"), `expected ${skill} to forbid DOM reading`);
