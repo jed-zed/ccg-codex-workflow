@@ -1148,6 +1148,14 @@ test("fixture:gptpro commands, skills, templates, doctor, and bridge coverage ex
     const skillText = fs.readFileSync(path.join(repoRoot, "plugins", "ccg", "skills", skill, "SKILL.md"), "utf8");
     assert(skillText.includes("Codex + Gemini + GPT Pro"), `expected ${skill} to define tri-model workflow`);
     assert(skillText.includes("Run Gemini before GPT Pro"), `expected ${skill} to require Gemini before GPT Pro`);
+    assert(skillText.includes("Gemini Gate Before GPT Pro"), `expected ${skill} to require Gemini gate before GPT Pro`);
+    assert(skillText.includes("CCG_GEMINI_RESPONSE_FILE"), `expected ${skill} to require a Gemini response file`);
+    assert(skillText.includes("non-empty Gemini response"), `expected ${skill} to require non-empty Gemini output`);
+    assert(
+      skillText.includes("do not create a GPT Pro bridge session"),
+      `expected ${skill} to stop before GPT Pro session when Gemini fails`
+    );
+    assert(skillText.includes("Do not invent Gemini findings"), `expected ${skill} to forbid fake Gemini summaries`);
     assert(skillText.includes("bundled Gemini preview helper"), `expected ${skill} to use bundled Gemini helper`);
     assert(skillText.includes("synthesize Codex, Gemini, and GPT Pro"), `expected ${skill} to synthesize all models`);
     assert(skillText.includes("Do not read ChatGPT web DOM"), `expected ${skill} to forbid DOM reading`);

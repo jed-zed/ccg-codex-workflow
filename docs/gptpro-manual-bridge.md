@@ -17,6 +17,17 @@ Run Gemini before GPT Pro.
 - After the user saves GPT Pro output, Codex must synthesize Codex, Gemini, and GPT Pro findings in Chinese.
 - Gemini and GPT Pro remain helper evidence only; Codex makes the final decision.
 
+## Gemini Gate Before GPT Pro
+
+Before creating a GPT Pro manual prompt, Codex must have:
+
+- a successful Gemini helper launch through the bundled preview helper;
+- a real `CCG_GEMINI_RESPONSE_FILE` path;
+- a non-empty Gemini response read from that file;
+- a concise Gemini findings summary derived from that response file.
+
+If Gemini fails, does not produce a response file, or writes an empty response, stop in Chinese and do not create a GPT Pro bridge session. Do not invent Gemini findings.
+
 ## Hard Boundaries
 
 - Do not automate ChatGPT web login.
