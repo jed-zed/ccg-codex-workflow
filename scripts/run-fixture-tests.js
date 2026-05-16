@@ -832,6 +832,89 @@ test("fixture:gptpro-bridge creates prompt, response, and status artifacts", () 
   assert(fs.readFileSync(promptPath, "utf8").includes("Plan an audit log bridge."), "expected prompt text");
 });
 
+test("fixture:gptpro-bridge prints full manual prompt when requested", () => {
+  const dir = tempDir("ccg-gptpro-print-prompt-");
+  const outputRoot = path.join(dir, ".codex", "ccg", "gptpro");
+  const promptText = "Plan a handoff barrier. Include exact prompt display.";
+  const result = run(python, [
+    gptproBridge,
+    "--mode",
+    "plan",
+    "--workdir",
+    dir,
+    "--prompt",
+    promptText,
+    "--slug",
+    "handoff-barrier",
+    "--output-root",
+    outputRoot,
+    "--hold-seconds",
+    "0",
+    "--print-prompt",
+  ]);
+
+  const begin = result.stdout.indexOf("CCG_GPTPRO_PROMPT_BEGIN");
+  const prompt = result.stdout.indexOf(promptText);
+  const end = result.stdout.indexOf("CCG_GPTPRO_PROMPT_END");
+  assert(begin >= 0, `expected prompt begin marker:\n${result.stdout}`);
+  assert(prompt > begin, `expected full prompt text after begin marker:\n${result.stdout}`);
+  assert(end > prompt, `expected prompt end marker after prompt text:\n${result.stdout}`);
+});
+
+test("fixture:gptpro-bridge detached preview remains usable after command exits", () => {
+  const dir = tempDir("ccg-gptpro-detached-preview-");
+  const outputRoot = path.join(dir, ".codex", "ccg", "gptpro");
+  const result = run(python, [
+    gptproBridge,
+    "--mode",
+    "review",
+    "--workdir",
+    dir,
+    "--prompt",
+    "Review detached preview handoff.",
+    "--slug",
+    "detached-preview",
+    "--output-root",
+    outputRoot,
+    "--detach-preview",
+    "--print-prompt",
+  ]);
+
+  const urlLine = result.stdout.split(/\r?\n/).find((line) => line.startsWith("CCG_GPTPRO_PREVIEW_URL="));
+  const sessionLine = result.stdout.split(/\r?\n/).find((line) => line.startsWith("CCG_GPTPRO_SESSION_DIR="));
+  assert(urlLine, `expected preview url:\n${result.stdout}`);
+  assert(sessionLine, `expected session dir:\n${result.stdout}`);
+  const previewUrl = urlLine.split("=").slice(1).join("=");
+  const sessionDir = sessionLine.split("=").slice(1).join("=");
+  const snippet = `
+import json, pathlib, sys, time, urllib.request
+url = sys.argv[1]
+session = pathlib.Path(sys.argv[2])
+deadline = time.time() + 10
+while True:
+    try:
+        with urllib.request.urlopen(url + "state", timeout=1) as response:
+            print("STATE_STATUS=" + str(response.status))
+        break
+    except Exception:
+        if time.time() >= deadline:
+            raise
+        time.sleep(0.25)
+data = json.dumps({"response": "detached manual output"}).encode("utf-8")
+req = urllib.request.Request(url + "save-response", data=data, headers={"Content-Type": "application/json"}, method="POST")
+with urllib.request.urlopen(req, timeout=5) as response:
+    print("SAVE_STATUS=" + str(response.status))
+status = json.loads((session / "status.json").read_text(encoding="utf-8"))
+print("RESPONSE_SAVED=" + str(status["rounds"]["round-1"]["response_saved"]))
+print("RESPONSE_TEXT=" + (session / "round-1" / "response.md").read_text(encoding="utf-8"))
+`;
+  const saved = run(python, ["-c", snippet, previewUrl, sessionDir]);
+  assert(saved.stdout.includes("STATE_STATUS=200"), `expected detached preview state:\n${saved.stdout}`);
+  assert(saved.stdout.includes("SAVE_STATUS=200"), `expected detached preview save:\n${saved.stdout}`);
+  assert(saved.stdout.includes("RESPONSE_SAVED=True"), `expected saved status:\n${saved.stdout}`);
+  assert(saved.stdout.includes("RESPONSE_TEXT=detached manual output"), `expected saved response:\n${saved.stdout}`);
+});
+
 test("fixture:gptpro-bridge local save writes response.md", () => {
   const dir = tempDir("ccg-gptpro-save-");
   const snippet = `
@@ -1066,6 +1149,14 @@ test("fixture:gptpro commands, skills, templates, doctor, and bridge coverage ex
     assert(skillText.includes("Do not read ChatGPT web DOM"), `expected ${skill} to forbid DOM reading`);
     assert(skillText.includes("Expected manual questions: 1"), `expected ${skill} to document expected budget`);
     assert(skillText.includes("Maximum manual questions: 2"), `expected ${skill} to document maximum budget`);
+    assert(skillText.includes("Manual Handoff Barrier"), `expected ${skill} to define manual handoff barrier`);
+    assert(skillText.includes("display the full generated prompt"), `expected ${skill} to require full prompt display`);
+    assert(
+      skillText.includes("End the current assistant turn"),
+      `expected ${skill} to stop after manual handoff`
+    );
+    assert(skillText.includes("response_saved=true"), `expected ${skill} to require saved response before continuing`);
+    assert(skillText.includes("response.md is non-empty"), `expected ${skill} to require non-empty response`);
   }
 
   for (const template of ["base", "plan", "review", "exc", "followup"]) {
