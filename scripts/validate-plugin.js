@@ -195,6 +195,11 @@ function validateGptProManualBridge() {
     "Codex remains final owner",
     "Expected manual questions: 1",
     "Maximum manual questions: 2",
+    "Manual Handoff Barrier",
+    "display the full generated prompt",
+    "End the current assistant turn",
+    "response_saved=true",
+    "response.md is non-empty",
     "web_automation",
     "dom_extraction",
   ]) {
@@ -212,6 +217,9 @@ function validateGptProManualBridge() {
     "POST /mark-copied",
     "manual_questions_expected",
     "manual_questions_max",
+    "CCG_GPTPRO_PROMPT_BEGIN",
+    "CCG_GPTPRO_PROMPT_END",
+    "detach-preview",
     "webbrowser.open(\"https://chatgpt.com/\")",
   ]) {
     if (!script.includes(phrase)) fail(`gptpro_bridge.py is missing behavior phrase: ${phrase}`);

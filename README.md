@@ -296,7 +296,9 @@ This plugin supports manual ChatGPT Pro second-opinion planning and review throu
 - `/ccg:gptpro-review`
 - `/ccg:gptpro-exc`
 
-The bridge writes local prompt and response files under `.codex/ccg/gptpro/`. The user manually pastes the prompt into ChatGPT Pro and manually pastes the response back into the local bridge page or response file.
+The bridge writes local prompt and response files under `.codex/ccg/gptpro/`. After generating a prompt, Codex must pause at a manual handoff barrier: it displays the full generated prompt in chat, prints the preview URL and local artifact paths, and stops the current turn. The preview page is served by a detached local helper so the user can manually paste the prompt into ChatGPT Pro and manually paste the response back into the local bridge page or response file.
+
+Codex may continue only after `status.json` shows `response_saved=true` and `response.md is non-empty`.
 
 The bridge intentionally does not automate ChatGPT web login, prompt submission, DOM reading, or output extraction.
 

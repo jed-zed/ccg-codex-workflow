@@ -20,4 +20,6 @@ Expected manual ChatGPT Pro questions: 1.
 Maximum manual ChatGPT Pro questions: 2.
 Round 2 is only after Codex fixes blocker findings.
 
+Manual handoff is required. After generating the prompt, Codex must display the full generated prompt, show the preview URL plus prompt/response/status file paths, and stop the current turn so the user can manually submit the prompt to ChatGPT Pro and save the response.
+
 Do not automate ChatGPT web login, prompt submission, DOM reading, or output extraction. Codex must independently verify GPT Pro findings.

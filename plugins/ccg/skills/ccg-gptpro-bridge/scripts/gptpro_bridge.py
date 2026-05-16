@@ -13,6 +13,8 @@ import argparse
 import html
 import json
 import re
+import socket
+import subprocess
 import sys
 import threading
 import time
@@ -54,6 +56,23 @@ def display_path(path: Path, workdir: Path) -> str:
         return path.resolve().relative_to(workdir.resolve()).as_posix()
     except ValueError:
         return str(path.resolve())
+
+
+def free_port() -> int:
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+        sock.bind(("127.0.0.1", 0))
+        return int(sock.getsockname()[1])
+
+
+def wait_for_port(port: int, timeout_seconds: float = 10.0) -> bool:
+    deadline = time.time() + timeout_seconds
+    while time.time() < deadline:
+        try:
+            with socket.create_connection(("127.0.0.1", port), timeout=0.5):
+                return True
+        except OSError:
+            time.sleep(0.1)
+    return False
 
 
 def read_template(name: str) -> str:
@@ -226,6 +245,35 @@ def create_session(
     return BridgeSession(mode, workdir_path, session_dir, round_name, prompt_file, response_file, status_file)
 
 
+def load_session(session_dir: Path) -> BridgeSession:
+    session_dir = resolve_existing_session_dir(session_dir)
+    status_file = session_dir / "status.json"
+    status = json.loads(status_file.read_text(encoding="utf-8"))
+    round_name = f"round-{status.get('current_round', 1)}"
+    return BridgeSession(
+        str(status.get("mode", "plan")),
+        session_dir,
+        session_dir,
+        round_name,
+        session_dir / round_name / "prompt.md",
+        session_dir / round_name / "response.md",
+        status_file,
+    )
+
+
+def resolve_existing_session_dir(session_value: str | Path) -> Path:
+    session_dir = Path(str(session_value)).expanduser().resolve()
+    status_file = session_dir / "status.json"
+    if not status_file.exists():
+        raise ValueError(f"Session status file not found: {status_file}")
+    status = json.loads(status_file.read_text(encoding="utf-8"))
+    if status.get("provider") != PROVIDER:
+        raise ValueError("Session is not a GPT Pro manual bridge session.")
+    if session_dir.parent.name != "gptpro" or session_dir.parent.parent.name != "ccg":
+        raise ValueError("Session must be inside a .codex/ccg/gptpro output root.")
+    return session_dir
+
+
 def save_response(session: BridgeSession, response_text: str) -> None:
     if not response_text.strip():
         raise ValueError("Manual GPT Pro response cannot be empty.")
@@ -360,7 +408,7 @@ document.getElementById('saveResponse').addEventListener('click', async () => {{
     return page.encode("utf-8")
 
 
-def start_server(session: BridgeSession, open_browser: bool = False) -> tuple[ThreadingHTTPServer, str]:
+def start_server(session: BridgeSession, open_browser: bool = False, port: int = 0) -> tuple[ThreadingHTTPServer, str]:
     class Handler(BaseHTTPRequestHandler):
         def log_message(self, format: str, *args: Any) -> None:
             return
@@ -409,7 +457,7 @@ def start_server(session: BridgeSession, open_browser: bool = False) -> tuple[Th
                 return
             self.send_error(404)
 
-    server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+    server = ThreadingHTTPServer(("127.0.0.1", port), Handler)
     host, port = server.server_address
     url = f"http://{host}:{port}/"
     thread = threading.Thread(target=server.serve_forever, daemon=True)
@@ -421,7 +469,7 @@ def start_server(session: BridgeSession, open_browser: bool = False) -> tuple[Th
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Create a manual ChatGPT Pro bridge session")
-    parser.add_argument("--mode", choices=["plan", "review", "exc"], required=True)
+    parser.add_argument("--mode", choices=["plan", "review", "exc"])
     parser.add_argument("--workdir", default=".")
     parser.add_argument("--prompt", default="")
     parser.add_argument("--prompt-file", default="")
@@ -433,8 +481,13 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--open-preview", action="store_true")
     parser.add_argument("--open-chatgpt", action="store_true")
     parser.add_argument("--copy-prompt", action="store_true")
+    parser.add_argument("--detach-preview", action="store_true")
+    parser.add_argument("--print-prompt", action="store_true")
     parser.add_argument("--wait-response", action="store_true")
     parser.add_argument("--hold-seconds", type=int, default=0)
+    parser.add_argument("--serve-session", help=argparse.SUPPRESS)
+    parser.add_argument("--preview-port", type=int, default=0, help=argparse.SUPPRESS)
+    parser.add_argument("--serve-timeout-seconds", type=int, default=14400, help=argparse.SUPPRESS)
     return parser.parse_args(argv)
 
 
@@ -448,6 +501,10 @@ def print_outputs(session: BridgeSession, preview_url: str) -> None:
     print(f"CCG_GPTPRO_RESPONSE_FILE={session.response_file}", flush=True)
     print(f"CCG_GPTPRO_STATUS_FILE={session.status_file}", flush=True)
     print(f"CCG_GPTPRO_PREVIEW_URL={preview_url}", flush=True)
+    if status.get("preview_pid"):
+        print(f"CCG_GPTPRO_PREVIEW_PID={status['preview_pid']}", flush=True)
+    if status.get("preview_log"):
+        print(f"CCG_GPTPRO_PREVIEW_LOG={status['preview_log']}", flush=True)
     print("CCG_GPTPRO_MANUAL_BRIDGE=1", flush=True)
     print("CCG_GPTPRO_WEB_AUTOMATION=0", flush=True)
     print("CCG_GPTPRO_DOM_EXTRACTION=0", flush=True)
@@ -455,8 +512,87 @@ def print_outputs(session: BridgeSession, preview_url: str) -> None:
     print(f"CCG_GPTPRO_MANUAL_QUESTIONS_MAX={MANUAL_QUESTIONS_MAX}", flush=True)
 
 
+def print_prompt(session: BridgeSession) -> None:
+    print("CCG_GPTPRO_PROMPT_BEGIN", flush=True)
+    print(session.prompt_file.read_text(encoding="utf-8"), flush=True)
+    print("CCG_GPTPRO_PROMPT_END", flush=True)
+
+
+def start_detached_preview(
+    session: BridgeSession,
+    *,
+    open_browser: bool,
+    preview_port: int,
+    timeout_seconds: int,
+) -> str:
+    port = preview_port or free_port()
+    url = f"http://127.0.0.1:{port}/"
+    log_path = session.session_dir / "preview-server.log"
+    command = [
+        sys.executable,
+        str(Path(__file__).resolve()),
+        "--serve-session",
+        str(session.session_dir),
+        "--preview-port",
+        str(port),
+        "--serve-timeout-seconds",
+        str(timeout_seconds),
+    ]
+    if open_browser:
+        command.append("--open-preview")
+
+    with log_path.open("ab") as log_file:
+        process_options: dict[str, Any] = {
+            "cwd": str(session.workdir),
+            "stdin": subprocess.DEVNULL,
+            "stdout": log_file,
+            "stderr": subprocess.STDOUT,
+        }
+        if sys.platform == "win32":
+            process_options["creationflags"] = getattr(subprocess, "DETACHED_PROCESS", 0) | getattr(
+                subprocess, "CREATE_NEW_PROCESS_GROUP", 0
+            )
+        else:
+            process_options["start_new_session"] = True
+        process_factory = getattr(subprocess, "Popen")
+        process = process_factory(command, **process_options)
+
+    ready = wait_for_port(port)
+    status = session.status()
+    status["preview_url"] = url
+    status["preview_pid"] = process.pid
+    status["preview_log"] = str(log_path)
+    status["preview_ready"] = ready
+    session.write_status(status)
+    return url
+
+
+def serve_existing_session(args: argparse.Namespace) -> int:
+    session_value = str(args.serve_session)
+    session = load_session(resolve_existing_session_dir(session_value))
+    server, url = start_server(session, open_browser=args.open_preview, port=args.preview_port)
+    print(f"CCG_GPTPRO_PREVIEW_URL={url}", flush=True)
+    deadline = time.time() + args.serve_timeout_seconds if args.serve_timeout_seconds > 0 else None
+    try:
+        while not session.state()["response_saved"]:
+            if deadline and time.time() >= deadline:
+                break
+            time.sleep(1)
+    except KeyboardInterrupt:
+        return 130
+    finally:
+        server.shutdown()
+        server.server_close()
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
+    if args.serve_session:
+        return serve_existing_session(args)
+    if not args.mode:
+        print("--mode is required unless --serve-session is used", file=sys.stderr)
+        return 2
     try:
         raw_prompt = read_prompt(args.prompt, args.prompt_file)
         session = create_session(
@@ -476,8 +612,15 @@ def main(argv: list[str] | None = None) -> int:
     server: ThreadingHTTPServer | None = None
     preview_url = ""
     try:
-        if args.open_preview or args.wait_response or args.hold_seconds > 0:
-            server, preview_url = start_server(session, open_browser=args.open_preview)
+        if args.detach_preview:
+            preview_url = start_detached_preview(
+                session,
+                open_browser=args.open_preview,
+                preview_port=args.preview_port,
+                timeout_seconds=args.serve_timeout_seconds,
+            )
+        elif args.open_preview or args.wait_response or args.hold_seconds > 0:
+            server, preview_url = start_server(session, open_browser=args.open_preview, port=args.preview_port)
         if args.open_chatgpt:
             webbrowser.open("https://chatgpt.com/")
         if args.copy_prompt:
@@ -485,6 +628,8 @@ def main(argv: list[str] | None = None) -> int:
             status["prompt_copy_requested"] = True
             session.write_status(status)
         print_outputs(session, preview_url)
+        if args.print_prompt:
+            print_prompt(session)
 
         deadline = time.time() + args.hold_seconds if args.hold_seconds > 0 else None
         while args.wait_response and not session.state()["response_saved"]:

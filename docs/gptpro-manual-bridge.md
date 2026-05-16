@@ -29,6 +29,17 @@ Default one question.
 - Round 2 only for blocker re-check, revised plan comparison, applied diff review, or high-risk follow-up.
 - More than two manual questions means the task should be decomposed or returned to `/ccg:plan`, `/ccg:spec-*`, `/ccg:review`, or another Codex-native CCG workflow.
 
+## Manual Handoff Barrier
+
+After Codex creates a GPT Pro bridge session, it must pause for user-mediated ChatGPT Pro work.
+
+- Codex must display the full generated prompt in the chat.
+- Codex must show the preview URL, session directory, prompt file path, response file path, and status file path.
+- The preview page should be served by a detached local helper so Codex can end the current turn while the page remains available.
+- The user manually submits the prompt to ChatGPT Pro and manually saves the output in the local bridge page or `response.md`.
+- Codex must end the current assistant turn after the handoff instructions.
+- Codex may continue only after `status.json` shows `response_saved=true` and `response.md is non-empty`.
+
 ## Commands
 
 ### `/ccg:gptpro-plan`
