@@ -2,9 +2,48 @@
 
 ## Purpose
 
-The GPT Pro manual bridge gives Codex-native CCG workflows a user-mediated ChatGPT Pro second opinion for planning, review, and execution-companion analysis.
+The GPT Pro manual bridge gives Codex-native CCG workflows a user-mediated ChatGPT Pro second opinion for planning, review, and execution-companion analysis inside a Codex + Gemini + GPT Pro flow.
 
-Codex remains final owner. GPT Pro output is helper evidence only.
+Codex remains final owner. Gemini provides automatic read-only helper analysis through the bundled Gemini preview helper. GPT Pro output is manual helper evidence only.
+
+## Tri-model Order
+
+Run Gemini before GPT Pro.
+
+- Codex gathers the task, local context, relevant diff or plan evidence, and its preliminary analysis.
+- Codex runs Gemini through the bundled Gemini preview helper.
+- Codex includes the Gemini response file path and a concise Gemini findings summary in the GPT Pro manual prompt.
+- Codex stops at the manual handoff barrier and waits for the user to save GPT Pro output.
+- After the user saves GPT Pro output, Codex must synthesize Codex, Gemini, and GPT Pro findings in Chinese.
+- Gemini and GPT Pro remain helper evidence only; Codex makes the final decision.
+
+## Gemini Gate Before GPT Pro
+
+Before creating a GPT Pro manual prompt, Codex must have:
+
+- a successful Gemini helper launch through the bundled preview helper;
+- a real `CCG_GEMINI_RESPONSE_FILE` path;
+- a non-empty Gemini response read from that file;
+- a concise Gemini findings summary derived from that response file.
+
+If Gemini fails, does not produce a response file, or writes an empty response, stop in Chinese and do not create a GPT Pro bridge session. Do not invent Gemini findings.
+
+The helper enforces this with:
+
+```text
+--gemini-response-file <CCG_GEMINI_RESPONSE_FILE>
+--gemini-summary-file <summary-file>
+```
+
+For short diagnostics or fixtures, `--gemini-summary "<summary>"` may be used instead of a summary file.
+
+The helper injects Gemini Gate Evidence into `prompt.md` and records auditable provenance in `status.json`:
+
+- `response_file`
+- `response_non_empty`
+- `response_chars`
+- `response_sha256`
+- `summary`
 
 ## Hard Boundaries
 
@@ -33,9 +72,10 @@ Default one question.
 
 After Codex creates a GPT Pro bridge session, it must pause for user-mediated ChatGPT Pro work.
 
-- Codex must display the full generated prompt in the chat.
+- Codex must not paste the full generated prompt into chat during normal handoffs.
 - Codex must show the preview URL, session directory, prompt file path, response file path, and status file path.
 - The preview page should be served by a detached local helper so Codex can end the current turn while the page remains available.
+- The user opens the preview page and uses the preview page Copy Prompt button, or opens `prompt.md` if the browser copy button fails.
 - The user manually submits the prompt to ChatGPT Pro and manually saves the output in the local bridge page or `response.md`.
 - Codex must end the current assistant turn after the handoff instructions.
 - Codex may continue only after `status.json` shows `response_saved=true` and `response.md is non-empty`.
@@ -44,7 +84,15 @@ After Codex creates a GPT Pro bridge session, it must pause for user-mediated Ch
 
 ### `/ccg:gptpro-plan`
 
-Use this for a planning second opinion.
+Use this for a Codex + Gemini + GPT Pro planning workflow with a manual GPT Pro planning second opinion.
+
+Plan-only Boundary:
+
+- Do not execute implementation.
+- Do not apply code changes except writing or updating CCG plan artifacts and GPT Pro bridge artifacts.
+- Do not mutate product code, commit, push, create a pull request, or continue into `/ccg:execute` behavior.
+- After the user saves GPT Pro output, Codex may synthesize Codex, Gemini, and GPT Pro planning findings, produce or revise the plan, report the plan location, and stop.
+- Execution requires a separate `/ccg:execute <plan>` or `/ccg:codex-exec <plan>` request.
 
 Expected output from GPT Pro:
 
@@ -59,7 +107,7 @@ Round 2 is only for blocker re-check or revised plan comparison.
 
 ### `/ccg:gptpro-review`
 
-Use this for a review second opinion over a plan, diff, changed files, or verification summary.
+Use this for a Codex + Gemini + GPT Pro review workflow over a plan, diff, changed files, or verification summary.
 
 Expected output from GPT Pro:
 
@@ -73,7 +121,7 @@ Round 2 is only after Codex fixes blocker findings.
 
 ### `/ccg:gptpro-exc`
 
-Use this for read-only implementation companion advice.
+Use this for a Codex + Gemini + GPT Pro read-only implementation companion workflow.
 
 Expected output from GPT Pro:
 

@@ -290,13 +290,21 @@ Detached Gemini calls also open the browser preview automatically. If Windows bl
 
 ## ChatGPT Pro Manual Bridge
 
-This plugin supports manual ChatGPT Pro second-opinion planning and review through:
+This plugin supports Codex + Gemini + GPT Pro planning, review, and execution-companion workflows through:
 
 - `/ccg:gptpro-plan`
 - `/ccg:gptpro-review`
 - `/ccg:gptpro-exc`
 
-The bridge writes local prompt and response files under `.codex/ccg/gptpro/`. After generating a prompt, Codex must pause at a manual handoff barrier: it displays the full generated prompt in chat, prints the preview URL and local artifact paths, and stops the current turn. The preview page is served by a detached local helper so the user can manually paste the prompt into ChatGPT Pro and manually paste the response back into the local bridge page or response file.
+For these commands, Codex first runs Gemini read-only analysis through the bundled Gemini preview helper. Codex then includes the Gemini response file path and a concise Gemini findings summary in the GPT Pro manual prompt. After the user saves the GPT Pro response, Codex must synthesize Codex, Gemini, and GPT Pro findings and remain the final owner.
+
+Gemini Gate Before GPT Pro: Codex must read a real `CCG_GEMINI_RESPONSE_FILE` containing a non-empty Gemini response before creating any GPT Pro manual prompt. If Gemini fails, produces no response file, or writes an empty response, Codex stops in Chinese, does not create a GPT Pro bridge session, and must not invent Gemini findings.
+
+The helper enforces this gate with `--gemini-response-file <CCG_GEMINI_RESPONSE_FILE>` and `--gemini-summary-file <summary-file>` (or `--gemini-summary` for short diagnostics). It injects Gemini Gate Evidence into `prompt.md` and records `response_file`, `response_non_empty`, `response_chars`, `response_sha256`, and `summary` in `status.json`.
+
+`/ccg:gptpro-plan` has a Plan-only Boundary: it may produce or revise a plan, but must not execute implementation, apply product-code changes, commit, push, or create a pull request. Execution requires a later explicit `/ccg:execute <plan>` or `/ccg:codex-exec <plan>` request.
+
+The bridge writes local prompt and response files under `.codex/ccg/gptpro/`. After generating a prompt, Codex must pause at a manual handoff barrier: it does not paste the full generated prompt into chat, prints the preview URL and local artifact paths, tells the user to open the preview page and use the preview page Copy Prompt button, and stops the current turn. The preview page is served by a detached local helper so the user can manually paste the prompt into ChatGPT Pro and manually paste the response back into the local bridge page or response file.
 
 Codex may continue only after `status.json` shows `response_saved=true` and `response.md is non-empty`.
 

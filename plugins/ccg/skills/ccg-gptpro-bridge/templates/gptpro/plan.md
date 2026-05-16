@@ -2,6 +2,10 @@
 
 Review the CCG planning input below and provide a second-opinion planning analysis.
 
+The input should include Codex's planning context and any available Gemini findings. Compare them, call out disagreements, and help Codex make the final plan.
+
+Plan-only boundary: Do not execute implementation. Do not apply code changes. Do not ask Codex to continue directly into execution. Provide planning advice only.
+
 ## Expected Output
 
 1. Planning risks

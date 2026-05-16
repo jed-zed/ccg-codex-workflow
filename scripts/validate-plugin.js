@@ -195,9 +195,22 @@ function validateGptProManualBridge() {
     "Codex remains final owner",
     "Expected manual questions: 1",
     "Maximum manual questions: 2",
+    "Codex + Gemini + GPT Pro",
+    "Run Gemini before GPT Pro",
+    "Gemini Gate Before GPT Pro",
+    "CCG_GEMINI_RESPONSE_FILE",
+    "non-empty Gemini response",
+    "do not create a GPT Pro bridge session",
+    "do not invent Gemini findings",
+    "bundled Gemini preview helper",
+    "synthesize Codex, Gemini, and GPT Pro",
     "Manual Handoff Barrier",
-    "display the full generated prompt",
+    "Do not paste the full generated prompt into chat",
+    "preview page Copy Prompt",
     "End the current assistant turn",
+    "Plan-only Boundary",
+    "Do not execute implementation",
+    "Do not apply code changes",
     "response_saved=true",
     "response.md is non-empty",
     "web_automation",
@@ -220,9 +233,31 @@ function validateGptProManualBridge() {
     "CCG_GPTPRO_PROMPT_BEGIN",
     "CCG_GPTPRO_PROMPT_END",
     "detach-preview",
+    "--gemini-response-file",
+    "--gemini-summary-file",
+    "read_gemini_gate",
+    "response_sha256",
+    "Gemini Gate Evidence",
     "webbrowser.open(\"https://chatgpt.com/\")",
   ]) {
     if (!script.includes(phrase)) fail(`gptpro_bridge.py is missing behavior phrase: ${phrase}`);
+  }
+
+  const baseTemplate = fs.readFileSync(
+    path.join(repoRoot, "plugins/ccg/skills/ccg-gptpro-bridge/templates/gptpro/base.md"),
+    "utf8"
+  );
+  if (!baseTemplate.includes("Codex + Gemini + GPT Pro")) {
+    fail("GPT Pro base template must describe the tri-model workflow");
+  }
+  for (const template of ["plan", "review", "exc"]) {
+    const templateText = fs.readFileSync(
+      path.join(repoRoot, `plugins/ccg/skills/ccg-gptpro-bridge/templates/gptpro/${template}.md`),
+      "utf8"
+    );
+    if (!templateText.includes("Gemini findings")) {
+      fail(`GPT Pro ${template} template must ask GPT Pro to compare Gemini findings`);
+    }
   }
 
   const ccgCommand = fs.readFileSync(path.join(repoRoot, "plugins/ccg/commands/ccg.md"), "utf8");

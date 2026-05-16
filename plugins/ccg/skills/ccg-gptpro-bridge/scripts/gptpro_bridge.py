@@ -10,6 +10,7 @@ web login, prompt submission, DOM reading, or output extraction.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import html
 import json
 import re
@@ -58,6 +59,14 @@ def display_path(path: Path, workdir: Path) -> str:
         return str(path.resolve())
 
 
+def display_gate_response_file(gemini_gate: dict[str, Any], workdir: Path) -> str:
+    response_value = str(gemini_gate["response_file"])
+    response_path = Path(response_value)
+    if not response_path.is_absolute():
+        return response_value
+    return display_path(response_path, workdir)
+
+
 def free_port() -> int:
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
         sock.bind(("127.0.0.1", 0))
@@ -82,13 +91,35 @@ def read_template(name: str) -> str:
     return file_path.read_text(encoding="utf-8").strip()
 
 
-def compose_prompt(mode: str, raw_prompt: str, round_number: int, followup_reason: str | None) -> str:
+def compose_gemini_evidence(gemini_gate: dict[str, Any]) -> str:
+    return "\n".join(
+        [
+            "## Gemini Gate Evidence",
+            "",
+            f"Gemini response file: {gemini_gate['response_file']}",
+            f"Gemini response SHA-256: {gemini_gate['response_sha256']}",
+            f"Gemini response characters: {gemini_gate['response_chars']}",
+            "",
+            "Gemini findings summary:",
+            gemini_gate["summary"],
+        ]
+    )
+
+
+def compose_prompt(
+    mode: str,
+    raw_prompt: str,
+    round_number: int,
+    followup_reason: str | None,
+    gemini_gate: dict[str, Any],
+) -> str:
     sections = [read_template("base")]
     if round_number == 2:
         sections.append(read_template("followup"))
         if followup_reason:
             sections.append(f"## Follow-up Reason\n\n{followup_reason.strip()}")
     sections.append(read_template(mode))
+    sections.append(compose_gemini_evidence(gemini_gate))
     sections.append("## CCG Input\n\n" + raw_prompt.strip())
     return "\n\n".join(section for section in sections if section).strip() + "\n"
 
@@ -103,6 +134,50 @@ def read_prompt(prompt: str, prompt_file: str) -> str:
     if not combined:
         raise ValueError("A prompt or --prompt-file is required for the manual bridge.")
     return combined
+
+
+def read_gemini_gate(
+    workdir: str | Path,
+    response_file: str,
+    summary: str = "",
+    summary_file: str = "",
+) -> dict[str, Any]:
+    if not response_file:
+        raise ValueError("CCG_GEMINI_RESPONSE_FILE is required before GPT Pro bridge session creation.")
+
+    workdir_path = Path(workdir).resolve()
+    gemini_path = Path(response_file).expanduser()
+    if not gemini_path.is_absolute():
+        gemini_path = workdir_path / gemini_path
+    gemini_path = gemini_path.resolve()
+    if not gemini_path.exists():
+        raise ValueError(f"Gemini response file not found: {gemini_path}")
+
+    gemini_text = gemini_path.read_text(encoding="utf-8").strip()
+    if not gemini_text:
+        raise ValueError(f"Gemini response file is empty: {gemini_path}")
+
+    summary_parts: list[str] = []
+    if summary_file:
+        summary_path = Path(summary_file).expanduser()
+        if not summary_path.is_absolute():
+            summary_path = workdir_path / summary_path
+        summary_parts.append(summary_path.read_text(encoding="utf-8"))
+    if summary:
+        summary_parts.append(summary)
+    summary_text = "\n\n".join(part.strip() for part in summary_parts if part.strip()).strip()
+    if not summary_text:
+        raise ValueError("A concise Gemini findings summary is required before GPT Pro bridge session creation.")
+
+    gemini_bytes = gemini_path.read_bytes()
+    return {
+        "required": True,
+        "response_file": str(gemini_path),
+        "response_non_empty": True,
+        "response_chars": len(gemini_text),
+        "response_sha256": hashlib.sha256(gemini_bytes).hexdigest(),
+        "summary": summary_text,
+    }
 
 
 def ensure_unique_session_dir(output_root: Path, mode: str, slug: str) -> Path:
@@ -173,6 +248,7 @@ def create_session(
     round_number: int,
     followup_session: str | Path | None,
     followup_reason: str | None,
+    gemini_gate: dict[str, Any] | None = None,
 ) -> BridgeSession:
     if round_number > MANUAL_QUESTIONS_MAX:
         raise ValueError("Maximum manual questions: 2. Decompose the task or return to Codex-native CCG workflows.")
@@ -196,6 +272,12 @@ def create_session(
         status = json.loads(status_file.read_text(encoding="utf-8"))
         slug_value = str(status.get("slug") or slugify(session_dir.name))
         created_at = str(status.get("created_at") or utc_now())
+        if gemini_gate is None:
+            inherited_gate = status.get("gemini_gate")
+            if not inherited_gate:
+                raise ValueError("Gemini Gate Before GPT Pro is required for follow-up sessions.")
+            gemini_gate = dict(inherited_gate)
+            gemini_gate["inherited_from_round"] = 1
     else:
         slug_value = slugify(slug or prompt[:60])
         session_dir = ensure_unique_session_dir(output_root_path, mode, slug_value).resolve()
@@ -203,12 +285,17 @@ def create_session(
         status = {}
         created_at = utc_now()
 
+    if gemini_gate is None:
+        raise ValueError("CCG_GEMINI_RESPONSE_FILE is required before GPT Pro bridge session creation.")
+
     round_name = f"round-{round_number}"
     round_dir = session_dir / round_name
     round_dir.mkdir(parents=True, exist_ok=True)
     prompt_file = round_dir / "prompt.md"
     response_file = round_dir / "response.md"
-    prompt_file.write_text(compose_prompt(mode, prompt, round_number, followup_reason), encoding="utf-8")
+    prompt_gate = dict(gemini_gate)
+    prompt_gate["response_file"] = display_gate_response_file(prompt_gate, workdir_path)
+    prompt_file.write_text(compose_prompt(mode, prompt, round_number, followup_reason, prompt_gate), encoding="utf-8")
     if not response_file.exists():
         response_file.write_text("", encoding="utf-8")
 
@@ -240,6 +327,10 @@ def create_session(
         "auto_submit": False,
         "auto_output_read": False,
         "prompt_copied": bool(status.get("prompt_copied", False)),
+        "gemini_gate": {
+            **gemini_gate,
+            "response_file": display_gate_response_file(gemini_gate, workdir_path),
+        },
     }
     status_file.write_text(json.dumps(new_status, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
     return BridgeSession(mode, workdir_path, session_dir, round_name, prompt_file, response_file, status_file)
@@ -483,6 +574,9 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--copy-prompt", action="store_true")
     parser.add_argument("--detach-preview", action="store_true")
     parser.add_argument("--print-prompt", action="store_true")
+    parser.add_argument("--gemini-response-file", default="")
+    parser.add_argument("--gemini-summary", default="")
+    parser.add_argument("--gemini-summary-file", default="")
     parser.add_argument("--wait-response", action="store_true")
     parser.add_argument("--hold-seconds", type=int, default=0)
     parser.add_argument("--serve-session", help=argparse.SUPPRESS)
@@ -593,8 +687,28 @@ def main(argv: list[str] | None = None) -> int:
     if not args.mode:
         print("--mode is required unless --serve-session is used", file=sys.stderr)
         return 2
+    if args.round > MANUAL_QUESTIONS_MAX:
+        print(
+            "Maximum manual questions: 2. Decompose the task or return to Codex-native CCG workflows.",
+            file=sys.stderr,
+        )
+        return 2
+    if args.round < 1:
+        print("Round must be 1 or 2.", file=sys.stderr)
+        return 2
+    if args.round == 2 and not args.followup_session:
+        print("Round 2 requires --followup-session. Create round 1 first.", file=sys.stderr)
+        return 2
     try:
         raw_prompt = read_prompt(args.prompt, args.prompt_file)
+        gemini_gate = None
+        if args.gemini_response_file or args.gemini_summary or args.gemini_summary_file or not args.followup_session:
+            gemini_gate = read_gemini_gate(
+                args.workdir,
+                args.gemini_response_file,
+                args.gemini_summary,
+                args.gemini_summary_file,
+            )
         session = create_session(
             mode=args.mode,
             workdir=args.workdir,
@@ -604,6 +718,7 @@ def main(argv: list[str] | None = None) -> int:
             round_number=args.round,
             followup_session=args.followup_session or None,
             followup_reason=args.followup_reason or None,
+            gemini_gate=gemini_gate,
         )
     except Exception as error:
         print(str(error), file=sys.stderr)
