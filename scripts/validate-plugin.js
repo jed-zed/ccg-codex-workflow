@@ -213,6 +213,9 @@ function validateGptProManualBridge() {
     "Do not apply code changes",
     "response_saved=true",
     "response.md is non-empty",
+    "Project Access Context",
+    "Repository URL is optional context",
+    "ChatGPT GitHub connector",
     "web_automation",
     "dom_extraction",
   ]) {
@@ -235,9 +238,14 @@ function validateGptProManualBridge() {
     "detach-preview",
     "--gemini-response-file",
     "--gemini-summary-file",
+    "--repo-url",
     "read_gemini_gate",
+    "detect_project_context",
+    "sanitize_repository_url",
     "response_sha256",
+    "project_context",
     "Gemini Gate Evidence",
+    "Project Access Context",
     "webbrowser.open(\"https://chatgpt.com/\")",
   ]) {
     if (!script.includes(phrase)) fail(`gptpro_bridge.py is missing behavior phrase: ${phrase}`);
@@ -249,6 +257,12 @@ function validateGptProManualBridge() {
   );
   if (!baseTemplate.includes("Codex + Gemini + GPT Pro")) {
     fail("GPT Pro base template must describe the tri-model workflow");
+  }
+  if (!baseTemplate.includes("ChatGPT GitHub connector")) {
+    fail("GPT Pro base template must explain optional GitHub connector context");
+  }
+  if (!baseTemplate.includes("Pasted CCG input")) {
+    fail("GPT Pro base template must prioritize pasted context over repository URL content");
   }
   for (const template of ["plan", "review", "exc"]) {
     const templateText = fs.readFileSync(

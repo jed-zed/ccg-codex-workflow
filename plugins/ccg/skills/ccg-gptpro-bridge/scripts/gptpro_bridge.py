@@ -24,6 +24,7 @@ from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlsplit, urlunsplit
 
 PROVIDER = "chatgpt-pro-manual"
 MANUAL_QUESTIONS_EXPECTED = 1
@@ -67,6 +68,65 @@ def display_gate_response_file(gemini_gate: dict[str, Any], workdir: Path) -> st
     return display_path(response_path, workdir)
 
 
+def run_git(workdir: Path, args: list[str]) -> str:
+    try:
+        result = subprocess.run(
+            ["git", "-C", str(workdir), *args],
+            check=False,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=5,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return ""
+    if result.returncode != 0:
+        return ""
+    return result.stdout.strip()
+
+
+def sanitize_repository_url(value: str) -> str:
+    url = value.strip()
+    if not url:
+        return ""
+    match = re.match(r"^(?:[^@]+@)?github\.com[:/](.+?)(?:\.git)?$", url)
+    if match:
+        return "https://github.com/" + match.group(1).strip("/")
+    try:
+        parsed = urlsplit(url)
+    except ValueError:
+        return re.sub(r"//[^/@]+@", "//", url).removesuffix(".git")
+    if parsed.scheme and parsed.netloc:
+        hostname = parsed.hostname or parsed.netloc.split("@")[-1]
+        netloc = hostname
+        if parsed.port:
+            netloc = f"{netloc}:{parsed.port}"
+        path = parsed.path.removesuffix(".git")
+        return urlunsplit((parsed.scheme, netloc, path, "", ""))
+    return re.sub(r"//[^/@]+@", "//", url).removesuffix(".git")
+
+
+def detect_project_context(workdir: str | Path, repo_url: str = "") -> dict[str, Any]:
+    workdir_path = Path(workdir).resolve()
+    git_root = run_git(workdir_path, ["rev-parse", "--show-toplevel"])
+    git_root_path = Path(git_root).resolve() if git_root else workdir_path
+    detected_url = repo_url or run_git(git_root_path, ["remote", "get-url", "origin"])
+    status_short = run_git(git_root_path, ["status", "--short"])
+    context = {
+        "project_name": git_root_path.name,
+        "workdir": display_path(workdir_path, workdir_path),
+        "git_root": display_path(git_root_path, workdir_path),
+        "repository_url": sanitize_repository_url(detected_url),
+        "branch": run_git(git_root_path, ["branch", "--show-current"]) or "",
+        "commit": run_git(git_root_path, ["rev-parse", "HEAD"]) or "",
+        "dirty": bool(status_short),
+        "status_summary": "dirty" if status_short else "clean",
+    }
+    context["github_context_hint"] = bool(context["repository_url"])
+    return context
+
+
 def free_port() -> int:
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
         sock.bind(("127.0.0.1", 0))
@@ -106,12 +166,45 @@ def compose_gemini_evidence(gemini_gate: dict[str, Any]) -> str:
     )
 
 
+def compose_project_context(project_context: dict[str, Any]) -> str:
+    repo_url = str(project_context.get("repository_url") or "not provided")
+    branch = str(project_context.get("branch") or "unknown")
+    commit = str(project_context.get("commit") or "unknown")
+    status_summary = str(project_context.get("status_summary") or "unknown")
+    return "\n".join(
+        [
+            "## Project Access Context",
+            "",
+            f"Project name: {project_context.get('project_name') or 'unknown'}",
+            f"Repository URL: {repo_url}",
+            f"Current branch: {branch}",
+            f"Current commit: {commit}",
+            f"Local git status: {status_summary}",
+            "",
+            "Repository URL is optional context, not the source of truth.",
+            (
+                "If you can use ChatGPT GitHub connector, Deep Research, or browsing, you may inspect "
+                "the repository URL for extra context and cite exact file paths or commits you used."
+            ),
+            (
+                "If you cannot access the repository URL, do not guess. Rely on the pasted CCG input, "
+                "Gemini Gate Evidence, and any included diffs or file excerpts."
+            ),
+            (
+                "The repository URL may not include uncommitted local changes; pasted context has "
+                "priority for current work."
+            ),
+        ]
+    )
+
+
 def compose_prompt(
     mode: str,
     raw_prompt: str,
     round_number: int,
     followup_reason: str | None,
     gemini_gate: dict[str, Any],
+    project_context: dict[str, Any],
 ) -> str:
     sections = [read_template("base")]
     if round_number == 2:
@@ -119,6 +212,7 @@ def compose_prompt(
         if followup_reason:
             sections.append(f"## Follow-up Reason\n\n{followup_reason.strip()}")
     sections.append(read_template(mode))
+    sections.append(compose_project_context(project_context))
     sections.append(compose_gemini_evidence(gemini_gate))
     sections.append("## CCG Input\n\n" + raw_prompt.strip())
     return "\n\n".join(section for section in sections if section).strip() + "\n"
@@ -249,6 +343,7 @@ def create_session(
     followup_session: str | Path | None,
     followup_reason: str | None,
     gemini_gate: dict[str, Any] | None = None,
+    project_context: dict[str, Any] | None = None,
 ) -> BridgeSession:
     if round_number > MANUAL_QUESTIONS_MAX:
         raise ValueError("Maximum manual questions: 2. Decompose the task or return to Codex-native CCG workflows.")
@@ -287,6 +382,8 @@ def create_session(
 
     if gemini_gate is None:
         raise ValueError("CCG_GEMINI_RESPONSE_FILE is required before GPT Pro bridge session creation.")
+    if project_context is None:
+        project_context = detect_project_context(workdir_path)
 
     round_name = f"round-{round_number}"
     round_dir = session_dir / round_name
@@ -295,7 +392,10 @@ def create_session(
     response_file = round_dir / "response.md"
     prompt_gate = dict(gemini_gate)
     prompt_gate["response_file"] = display_gate_response_file(prompt_gate, workdir_path)
-    prompt_file.write_text(compose_prompt(mode, prompt, round_number, followup_reason, prompt_gate), encoding="utf-8")
+    prompt_file.write_text(
+        compose_prompt(mode, prompt, round_number, followup_reason, prompt_gate, project_context),
+        encoding="utf-8",
+    )
     if not response_file.exists():
         response_file.write_text("", encoding="utf-8")
 
@@ -327,6 +427,7 @@ def create_session(
         "auto_submit": False,
         "auto_output_read": False,
         "prompt_copied": bool(status.get("prompt_copied", False)),
+        "project_context": project_context,
         "gemini_gate": {
             **gemini_gate,
             "response_file": display_gate_response_file(gemini_gate, workdir_path),
@@ -577,6 +678,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--gemini-response-file", default="")
     parser.add_argument("--gemini-summary", default="")
     parser.add_argument("--gemini-summary-file", default="")
+    parser.add_argument("--repo-url", default="")
     parser.add_argument("--wait-response", action="store_true")
     parser.add_argument("--hold-seconds", type=int, default=0)
     parser.add_argument("--serve-session", help=argparse.SUPPRESS)
@@ -709,6 +811,7 @@ def main(argv: list[str] | None = None) -> int:
                 args.gemini_summary,
                 args.gemini_summary_file,
             )
+        project_context = detect_project_context(args.workdir, args.repo_url)
         session = create_session(
             mode=args.mode,
             workdir=args.workdir,
@@ -719,6 +822,7 @@ def main(argv: list[str] | None = None) -> int:
             followup_session=args.followup_session or None,
             followup_reason=args.followup_reason or None,
             gemini_gate=gemini_gate,
+            project_context=project_context,
         )
     except Exception as error:
         print(str(error), file=sys.stderr)

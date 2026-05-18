@@ -60,6 +60,22 @@ Use the helper-level gate arguments for every new GPT Pro session:
 
 Use `--gemini-summary "<summary>"` only for short diagnostic or fixture calls. The helper injects Gemini Gate Evidence into `prompt.md` and records `response_file`, `response_non_empty`, `response_chars`, `response_sha256`, and `summary` under `status.json` as auditable provenance.
 
+## Project Access Context
+
+The helper should include project metadata in every GPT Pro prompt:
+
+- local project name;
+- sanitized repository URL, when detected from Git or provided with `--repo-url`;
+- current branch and commit;
+- whether local git status is clean or dirty.
+
+GitHub links are useful but not sufficient by themselves. The repository URL is optional context, not the source of truth.
+
+- If GPT Pro can use ChatGPT GitHub connector, Deep Research, or browsing, it may inspect the repository URL and cite exact file paths or commits.
+- If GPT Pro cannot access the repository URL, it must not guess repository facts.
+- Pasted CCG input, Gemini Gate Evidence, diffs, and file excerpts have priority over repository content because local uncommitted changes may not exist on GitHub.
+- The helper must sanitize repository URLs before including them in prompts or `status.json`; never include credentials, access tokens, cookies, or local filesystem paths as repository URLs.
+
 ## Workflow
 
 1. Build a prompt using the selected mode template.
@@ -78,6 +94,7 @@ Use `--gemini-summary "<summary>"` only for short diagnostic or fixture calls. T
 After creating a GPT Pro bridge session, Codex must stop at a manual handoff barrier.
 
 - Run `scripts/gptpro_bridge.py` with `--detach-preview --open-preview --gemini-response-file <CCG_GEMINI_RESPONSE_FILE> --gemini-summary-file <summary-file>` for round 1 sessions.
+- Add `--repo-url <repository-url>` only when Codex needs to override the detected Git remote URL.
 - Follow-up sessions may pass fresh Gemini evidence with the same arguments, or inherit the existing `gemini_gate` provenance from round 1.
 - Do not paste the full generated prompt into chat during normal handoffs.
 - Show the preview URL, session directory, prompt file path, response file path, and status file path.

@@ -805,6 +805,7 @@ test("fixture:gptpro-bridge creates prompt, response, and status artifacts", () 
   const dir = tempDir("ccg-gptpro-artifacts-");
   const outputRoot = path.join(dir, ".codex", "ccg", "gptpro");
   const gemini = createGeminiGateFixture(dir, "Gemini says preserve manual boundaries.", "Preserve manual boundaries.");
+  const repoUrlWithCredential = "https://ghp_secret-token@github.com/example/ccg-codex-workflow.git";
   const result = run(python, [
     gptproBridge,
     "--mode",
@@ -818,6 +819,8 @@ test("fixture:gptpro-bridge creates prompt, response, and status artifacts", () 
     "--output-root",
     outputRoot,
     ...gemini.args,
+    "--repo-url",
+    repoUrlWithCredential,
     "--hold-seconds",
     "0",
   ]);
@@ -846,9 +849,19 @@ test("fixture:gptpro-bridge creates prompt, response, and status artifacts", () 
   assert(status.gemini_gate.response_non_empty === true, "expected non-empty Gemini response");
   assert(status.gemini_gate.response_sha256, "expected Gemini response hash");
   assert(status.gemini_gate.summary === "Preserve manual boundaries.", "expected Gemini summary");
+  assert(
+    status.project_context.repository_url === "https://github.com/example/ccg-codex-workflow",
+    "expected sanitized repository URL"
+  );
+  assert(!JSON.stringify(status).includes("ghp_secret-token"), "did not expect credential in status");
   assert(status.rounds["round-1"].response_saved === false, "expected unsaved response initially");
   const prompt = fs.readFileSync(promptPath, "utf8");
   assert(prompt.includes("Plan an audit log bridge."), "expected prompt text");
+  assert(prompt.includes("## Project Access Context"), "expected project context section");
+  assert(prompt.includes("https://github.com/example/ccg-codex-workflow"), "expected repository URL in prompt");
+  assert(!prompt.includes("ghp_secret-token"), "did not expect credential in prompt");
+  assert(prompt.includes("ChatGPT GitHub connector"), "expected GitHub connector guidance");
+  assert(prompt.includes("pasted CCG input"), "expected pasted context priority guidance");
   assert(prompt.includes("## Gemini Gate Evidence"), "expected Gemini evidence section");
   assert(prompt.includes("Preserve manual boundaries."), "expected Gemini summary in prompt");
 });
@@ -1273,6 +1286,14 @@ test("fixture:gptpro commands, skills, templates, doctor, and bridge coverage ex
     assert(skillText.includes("response_saved=true"), `expected ${skill} to require saved response before continuing`);
     assert(skillText.includes("response.md is non-empty"), `expected ${skill} to require non-empty response`);
   }
+  const bridgeSkillText = fs.readFileSync(
+    path.join(repoRoot, "plugins", "ccg", "skills", "ccg-gptpro-bridge", "SKILL.md"),
+    "utf8"
+  );
+  assert(bridgeSkillText.includes("Project Access Context"), "expected shared bridge skill to document project context");
+  assert(bridgeSkillText.includes("--repo-url"), "expected shared bridge skill to document repo URL override");
+  assert(bridgeSkillText.includes("sanitize repository URLs"), "expected shared bridge skill to require URL sanitization");
+  assert(bridgeSkillText.includes("ChatGPT GitHub connector"), "expected shared bridge skill to mention GitHub connector");
   const planCommandText = fs.readFileSync(
     path.join(repoRoot, "plugins", "ccg", "commands", "gptpro-plan.md"),
     "utf8"
