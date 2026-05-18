@@ -866,6 +866,97 @@ test("fixture:gptpro-bridge creates prompt, response, and status artifacts", () 
   assert(prompt.includes("Preserve manual boundaries."), "expected Gemini summary in prompt");
 });
 
+test("fixture:gptpro-bridge sanitizes repository URL edge cases", () => {
+  const dir = tempDir("ccg-gptpro-url-sanitize-");
+  const snippet = `
+import importlib.util, pathlib, sys
+script = pathlib.Path(sys.argv[1])
+root = pathlib.Path(sys.argv[2])
+spec = importlib.util.spec_from_file_location("gptpro_bridge", script)
+module = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(module)
+cases = {
+    "posix": "/home/alice/private/repo.git",
+    "file": "file:///home/alice/private/repo.git",
+    "windows": "C:\\\\Users\\\\alice\\\\private\\\\repo.git",
+    "unc": "\\\\\\\\server\\\\share\\\\repo.git",
+    "token": "https://ghp_secret@github.com/org/repo.git?token=abc#frag",
+    "scp": "git@gitlab.example.com:org/repo.git",
+    "github_scp": "git@github.com:org/repo.git",
+    "ssh": "ssh://git@github.com/org/repo.git",
+    "control": "https://github.com/org/repo.git\\nmalicious",
+}
+for name, value in cases.items():
+    print(name + "=" + module.sanitize_repository_url(value))
+context = module.detect_project_context(root)
+print("STATUS=" + context["status_summary"])
+print("DIRTY=" + str(context["dirty"]))
+print("HAS_WORKDIR=" + str("workdir" in context))
+print("HAS_GIT_ROOT=" + str("git_root" in context))
+`;
+  const result = run(python, ["-c", snippet, gptproBridge, dir]);
+  const output = Object.fromEntries(
+    result.stdout
+      .trim()
+      .split(/\r?\n/)
+      .filter(Boolean)
+      .map((line) => {
+        const index = line.indexOf("=");
+        return [line.slice(0, index), line.slice(index + 1)];
+      })
+  );
+  assert(output.posix === "", `expected posix path to be rejected:\n${result.stdout}`);
+  assert(output.file === "", `expected file URL to be rejected:\n${result.stdout}`);
+  assert(output.windows === "", `expected Windows path to be rejected:\n${result.stdout}`);
+  assert(output.unc === "", `expected UNC path to be rejected:\n${result.stdout}`);
+  assert(output.token === "https://github.com/org/repo", `expected token URL to be sanitized:\n${result.stdout}`);
+  assert(!result.stdout.includes("ghp_secret"), `did not expect credential in sanitizer output:\n${result.stdout}`);
+  assert(!result.stdout.includes("token=abc"), `did not expect query in sanitizer output:\n${result.stdout}`);
+  assert(!result.stdout.includes("#frag"), `did not expect fragment in sanitizer output:\n${result.stdout}`);
+  assert(output.scp === "https://gitlab.example.com/org/repo", `expected scp-like remote:\n${result.stdout}`);
+  assert(output.github_scp === "https://github.com/org/repo", `expected GitHub scp remote:\n${result.stdout}`);
+  assert(output.ssh === "https://github.com/org/repo", `expected ssh remote normalization:\n${result.stdout}`);
+  assert(output.control === "", `expected control-char URL to be rejected:\n${result.stdout}`);
+  assert(output.STATUS === "not_git", `expected non-git status to be not_git:\n${result.stdout}`);
+  assert(output.DIRTY === "None", `expected non-git dirty to be None:\n${result.stdout}`);
+  assert(output.HAS_WORKDIR === "False", `did not expect workdir in project context:\n${result.stdout}`);
+  assert(output.HAS_GIT_ROOT === "False", `did not expect git_root in project context:\n${result.stdout}`);
+});
+
+test("fixture:gptpro-bridge omits unsafe local repository URL from artifacts", () => {
+  const dir = tempDir("ccg-gptpro-local-repo-url-");
+  const outputRoot = path.join(dir, ".codex", "ccg", "gptpro");
+  const gemini = createGeminiGateFixture(dir);
+  const localRepoUrl = "C:\\\\Users\\\\alice\\\\private\\\\repo.git";
+  const result = run(python, [
+    gptproBridge,
+    "--mode",
+    "plan",
+    "--workdir",
+    dir,
+    "--prompt",
+    "Plan without leaking local paths.",
+    "--slug",
+    "local-repo-url",
+    "--output-root",
+    outputRoot,
+    ...gemini.args,
+    "--repo-url",
+    localRepoUrl,
+    "--hold-seconds",
+    "0",
+  ]);
+  const sessionLine = result.stdout.split(/\r?\n/).find((line) => line.startsWith("CCG_GPTPRO_SESSION_DIR="));
+  const sessionDir = sessionLine.split("=").slice(1).join("=");
+  const statusText = fs.readFileSync(path.join(sessionDir, "status.json"), "utf8");
+  const prompt = fs.readFileSync(path.join(sessionDir, "round-1", "prompt.md"), "utf8");
+  const status = JSON.parse(statusText);
+  assert(status.project_context.repository_url === "", "expected unsafe local repo URL to be omitted");
+  assert(!statusText.includes("alice"), "did not expect local path in status");
+  assert(!prompt.includes("alice"), "did not expect local path in prompt");
+  assert(prompt.includes("Repository URL: not provided"), "expected prompt to mark missing repository URL");
+});
+
 test("fixture:gptpro-bridge refuses missing Gemini response file", () => {
   const dir = tempDir("ccg-gptpro-missing-gemini-");
   const outputRoot = path.join(dir, ".codex", "ccg", "gptpro");

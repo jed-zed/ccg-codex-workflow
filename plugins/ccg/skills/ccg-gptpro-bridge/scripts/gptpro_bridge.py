@@ -36,6 +36,9 @@ BOUNDARIES = (
     "Do not read ChatGPT web DOM",
     "Do not extract ChatGPT Output programmatically",
 )
+CONTROL_CHAR_PATTERN = re.compile(r"[\x00-\x1f\x7f]")
+WINDOWS_DRIVE_PATTERN = re.compile(r"^[A-Za-z]:[\\/]")
+SCP_LIKE_REMOTE_PATTERN = re.compile(r"^(?:([^@/:\\]+)@)?([A-Za-z0-9.-]+):(.+)$")
 
 
 def utc_now() -> str:
@@ -68,7 +71,7 @@ def display_gate_response_file(gemini_gate: dict[str, Any], workdir: Path) -> st
     return display_path(response_path, workdir)
 
 
-def run_git(workdir: Path, args: list[str]) -> str:
+def run_git_result(workdir: Path, args: list[str]) -> tuple[bool, str]:
     try:
         result = subprocess.run(
             ["git", "-C", str(workdir), *args],
@@ -80,48 +83,98 @@ def run_git(workdir: Path, args: list[str]) -> str:
             timeout=5,
         )
     except (OSError, subprocess.SubprocessError):
-        return ""
+        return False, ""
     if result.returncode != 0:
+        return False, ""
+    return True, result.stdout.strip()
+
+
+def run_git(workdir: Path, args: list[str]) -> str:
+    ok, output = run_git_result(workdir, args)
+    return output if ok else ""
+
+
+def is_local_path_like(value: str) -> bool:
+    candidate = value.strip()
+    if not candidate:
+        return False
+    return (
+        candidate.startswith("/")
+        or candidate.startswith("~")
+        or candidate.startswith("\\\\")
+        or WINDOWS_DRIVE_PATTERN.match(candidate) is not None
+        or ("\\" in candidate and "://" not in candidate)
+    )
+
+
+def normalize_remote_path(path_value: str) -> str:
+    path = path_value.strip().lstrip("/").removesuffix(".git")
+    if not path or path.startswith((".", "~")) or "\\" in path:
         return ""
-    return result.stdout.strip()
+    return path
 
 
 def sanitize_repository_url(value: str) -> str:
-    url = value.strip()
-    if not url:
+    raw = value.strip()
+    if not raw or CONTROL_CHAR_PATTERN.search(raw):
         return ""
-    match = re.match(r"^(?:[^@]+@)?github\.com[:/](.+?)(?:\.git)?$", url)
-    if match:
-        return "https://github.com/" + match.group(1).strip("/")
+    if raw.lower().startswith("file:") or is_local_path_like(raw):
+        return ""
+
+    scp_match = SCP_LIKE_REMOTE_PATTERN.match(raw) if "://" not in raw else None
+    if scp_match:
+        host = scp_match.group(2).lower()
+        path = normalize_remote_path(scp_match.group(3))
+        if not path:
+            return ""
+        return f"https://{host}/{path}"
+
     try:
-        parsed = urlsplit(url)
+        parsed = urlsplit(raw)
     except ValueError:
-        return re.sub(r"//[^/@]+@", "//", url).removesuffix(".git")
-    if parsed.scheme and parsed.netloc:
-        hostname = parsed.hostname or parsed.netloc.split("@")[-1]
-        netloc = hostname
-        if parsed.port:
-            netloc = f"{netloc}:{parsed.port}"
-        path = parsed.path.removesuffix(".git")
-        return urlunsplit((parsed.scheme, netloc, path, "", ""))
-    return re.sub(r"//[^/@]+@", "//", url).removesuffix(".git")
+        return ""
+    if not parsed.scheme and not parsed.netloc:
+        return ""
+    if parsed.scheme not in {"http", "https", "ssh", "git"}:
+        return ""
+    if not parsed.hostname:
+        return ""
+    path = normalize_remote_path(parsed.path)
+    if not path:
+        return ""
+    host = parsed.hostname.lower()
+    if parsed.port:
+        host = f"{host}:{parsed.port}"
+    scheme = "https" if parsed.scheme in {"ssh", "git"} else parsed.scheme
+    return urlunsplit((scheme, host, "/" + path, "", ""))
 
 
 def detect_project_context(workdir: str | Path, repo_url: str = "") -> dict[str, Any]:
     workdir_path = Path(workdir).resolve()
     git_root = run_git(workdir_path, ["rev-parse", "--show-toplevel"])
-    git_root_path = Path(git_root).resolve() if git_root else workdir_path
+    is_git_worktree = bool(git_root)
+    git_root_path = Path(git_root).resolve() if is_git_worktree else workdir_path
     detected_url = repo_url or run_git(git_root_path, ["remote", "get-url", "origin"])
-    status_short = run_git(git_root_path, ["status", "--short"])
+    status_ok, status_short = run_git_result(git_root_path, ["status", "--short"])
+    if not is_git_worktree:
+        status_summary = "not_git"
+        dirty: bool | None = None
+    elif not status_ok:
+        status_summary = "unknown"
+        dirty = None
+    elif status_short:
+        status_summary = "dirty"
+        dirty = True
+    else:
+        status_summary = "clean"
+        dirty = False
     context = {
         "project_name": git_root_path.name,
-        "workdir": display_path(workdir_path, workdir_path),
-        "git_root": display_path(git_root_path, workdir_path),
         "repository_url": sanitize_repository_url(detected_url),
         "branch": run_git(git_root_path, ["branch", "--show-current"]) or "",
         "commit": run_git(git_root_path, ["rev-parse", "HEAD"]) or "",
-        "dirty": bool(status_short),
-        "status_summary": "dirty" if status_short else "clean",
+        "dirty": dirty,
+        "status_summary": status_summary,
     }
     context["github_context_hint"] = bool(context["repository_url"])
     return context
