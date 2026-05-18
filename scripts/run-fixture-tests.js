@@ -805,6 +805,7 @@ test("fixture:gptpro-bridge creates prompt, response, and status artifacts", () 
   const dir = tempDir("ccg-gptpro-artifacts-");
   const outputRoot = path.join(dir, ".codex", "ccg", "gptpro");
   const gemini = createGeminiGateFixture(dir, "Gemini says preserve manual boundaries.", "Preserve manual boundaries.");
+  const repoUrlWithCredential = "https://ghp_secret-token@github.com/example/ccg-codex-workflow.git";
   const result = run(python, [
     gptproBridge,
     "--mode",
@@ -818,6 +819,8 @@ test("fixture:gptpro-bridge creates prompt, response, and status artifacts", () 
     "--output-root",
     outputRoot,
     ...gemini.args,
+    "--repo-url",
+    repoUrlWithCredential,
     "--hold-seconds",
     "0",
   ]);
@@ -846,11 +849,121 @@ test("fixture:gptpro-bridge creates prompt, response, and status artifacts", () 
   assert(status.gemini_gate.response_non_empty === true, "expected non-empty Gemini response");
   assert(status.gemini_gate.response_sha256, "expected Gemini response hash");
   assert(status.gemini_gate.summary === "Preserve manual boundaries.", "expected Gemini summary");
+  assert(
+    status.project_context.repository_url === "https://github.com/example/ccg-codex-workflow",
+    "expected sanitized repository URL"
+  );
+  assert(!JSON.stringify(status).includes("ghp_secret-token"), "did not expect credential in status");
   assert(status.rounds["round-1"].response_saved === false, "expected unsaved response initially");
   const prompt = fs.readFileSync(promptPath, "utf8");
   assert(prompt.includes("Plan an audit log bridge."), "expected prompt text");
+  assert(prompt.includes("## Project Access Context"), "expected project context section");
+  assert(prompt.includes("https://github.com/example/ccg-codex-workflow"), "expected repository URL in prompt");
+  assert(!prompt.includes("ghp_secret-token"), "did not expect credential in prompt");
+  assert(prompt.includes("ChatGPT GitHub connector"), "expected GitHub connector guidance");
+  assert(prompt.includes("pasted CCG input"), "expected pasted context priority guidance");
   assert(prompt.includes("## Gemini Gate Evidence"), "expected Gemini evidence section");
   assert(prompt.includes("Preserve manual boundaries."), "expected Gemini summary in prompt");
+});
+
+test("fixture:gptpro-bridge sanitizes repository URL edge cases", () => {
+  const dir = tempDir("ccg-gptpro-url-sanitize-");
+  const snippet = `
+import importlib.util, pathlib, sys
+script = pathlib.Path(sys.argv[1])
+root = pathlib.Path(sys.argv[2])
+spec = importlib.util.spec_from_file_location("gptpro_bridge", script)
+module = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(module)
+cases = {
+    "posix": "/home/alice/private/repo.git",
+    "file": "file:///home/alice/private/repo.git",
+    "windows": "C:\\\\Users\\\\alice\\\\private\\\\repo.git",
+    "unc": "\\\\\\\\server\\\\share\\\\repo.git",
+    "token": "https://ghp_secret@github.com/org/repo.git?token=abc#frag",
+    "scp": "git@gitlab.example.com:org/repo.git",
+    "github_scp": "git@github.com:org/repo.git",
+    "scp_query": "git@github.com:org/repo.git?token=abc",
+    "scp_fragment": "git@github.com:org/repo.git#frag",
+    "scp_query_fragment": "git@gitlab.example.com:org/repo.git?token=abc#frag",
+    "ssh": "ssh://git@github.com/org/repo.git",
+    "control": "https://github.com/org/repo.git\\nmalicious",
+}
+for name, value in cases.items():
+    print(name + "=" + module.sanitize_repository_url(value))
+context = module.detect_project_context(root)
+print("STATUS=" + context["status_summary"])
+print("DIRTY=" + str(context["dirty"]))
+print("HAS_WORKDIR=" + str("workdir" in context))
+print("HAS_GIT_ROOT=" + str("git_root" in context))
+`;
+  const result = run(python, ["-c", snippet, gptproBridge, dir]);
+  const output = Object.fromEntries(
+    result.stdout
+      .trim()
+      .split(/\r?\n/)
+      .filter(Boolean)
+      .map((line) => {
+        const index = line.indexOf("=");
+        return [line.slice(0, index), line.slice(index + 1)];
+      })
+  );
+  assert(output.posix === "", `expected posix path to be rejected:\n${result.stdout}`);
+  assert(output.file === "", `expected file URL to be rejected:\n${result.stdout}`);
+  assert(output.windows === "", `expected Windows path to be rejected:\n${result.stdout}`);
+  assert(output.unc === "", `expected UNC path to be rejected:\n${result.stdout}`);
+  assert(output.token === "https://github.com/org/repo", `expected token URL to be sanitized:\n${result.stdout}`);
+  assert(!result.stdout.includes("ghp_secret"), `did not expect credential in sanitizer output:\n${result.stdout}`);
+  assert(!result.stdout.includes("token=abc"), `did not expect query in sanitizer output:\n${result.stdout}`);
+  assert(!result.stdout.includes("#frag"), `did not expect fragment in sanitizer output:\n${result.stdout}`);
+  assert(output.scp === "https://gitlab.example.com/org/repo", `expected scp-like remote:\n${result.stdout}`);
+  assert(output.github_scp === "https://github.com/org/repo", `expected GitHub scp remote:\n${result.stdout}`);
+  assert(output.scp_query === "https://github.com/org/repo", `expected scp query stripping:\n${result.stdout}`);
+  assert(output.scp_fragment === "https://github.com/org/repo", `expected scp fragment stripping:\n${result.stdout}`);
+  assert(
+    output.scp_query_fragment === "https://gitlab.example.com/org/repo",
+    `expected scp query and fragment stripping:\n${result.stdout}`
+  );
+  assert(output.ssh === "https://github.com/org/repo", `expected ssh remote normalization:\n${result.stdout}`);
+  assert(output.control === "", `expected control-char URL to be rejected:\n${result.stdout}`);
+  assert(output.STATUS === "not_git", `expected non-git status to be not_git:\n${result.stdout}`);
+  assert(output.DIRTY === "None", `expected non-git dirty to be None:\n${result.stdout}`);
+  assert(output.HAS_WORKDIR === "False", `did not expect workdir in project context:\n${result.stdout}`);
+  assert(output.HAS_GIT_ROOT === "False", `did not expect git_root in project context:\n${result.stdout}`);
+});
+
+test("fixture:gptpro-bridge omits unsafe local repository URL from artifacts", () => {
+  const dir = tempDir("ccg-gptpro-local-repo-url-");
+  const outputRoot = path.join(dir, ".codex", "ccg", "gptpro");
+  const gemini = createGeminiGateFixture(dir);
+  const localRepoUrl = "C:\\\\Users\\\\alice\\\\private\\\\repo.git";
+  const result = run(python, [
+    gptproBridge,
+    "--mode",
+    "plan",
+    "--workdir",
+    dir,
+    "--prompt",
+    "Plan without leaking local paths.",
+    "--slug",
+    "local-repo-url",
+    "--output-root",
+    outputRoot,
+    ...gemini.args,
+    "--repo-url",
+    localRepoUrl,
+    "--hold-seconds",
+    "0",
+  ]);
+  const sessionLine = result.stdout.split(/\r?\n/).find((line) => line.startsWith("CCG_GPTPRO_SESSION_DIR="));
+  const sessionDir = sessionLine.split("=").slice(1).join("=");
+  const statusText = fs.readFileSync(path.join(sessionDir, "status.json"), "utf8");
+  const prompt = fs.readFileSync(path.join(sessionDir, "round-1", "prompt.md"), "utf8");
+  const status = JSON.parse(statusText);
+  assert(status.project_context.repository_url === "", "expected unsafe local repo URL to be omitted");
+  assert(!statusText.includes("alice"), "did not expect local path in status");
+  assert(!prompt.includes("alice"), "did not expect local path in prompt");
+  assert(prompt.includes("Repository URL: not provided"), "expected prompt to mark missing repository URL");
 });
 
 test("fixture:gptpro-bridge refuses missing Gemini response file", () => {
@@ -1273,6 +1386,14 @@ test("fixture:gptpro commands, skills, templates, doctor, and bridge coverage ex
     assert(skillText.includes("response_saved=true"), `expected ${skill} to require saved response before continuing`);
     assert(skillText.includes("response.md is non-empty"), `expected ${skill} to require non-empty response`);
   }
+  const bridgeSkillText = fs.readFileSync(
+    path.join(repoRoot, "plugins", "ccg", "skills", "ccg-gptpro-bridge", "SKILL.md"),
+    "utf8"
+  );
+  assert(bridgeSkillText.includes("Project Access Context"), "expected shared bridge skill to document project context");
+  assert(bridgeSkillText.includes("--repo-url"), "expected shared bridge skill to document repo URL override");
+  assert(bridgeSkillText.includes("sanitize repository URLs"), "expected shared bridge skill to require URL sanitization");
+  assert(bridgeSkillText.includes("ChatGPT GitHub connector"), "expected shared bridge skill to mention GitHub connector");
   const planCommandText = fs.readFileSync(
     path.join(repoRoot, "plugins", "ccg", "commands", "gptpro-plan.md"),
     "utf8"

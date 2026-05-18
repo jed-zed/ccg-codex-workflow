@@ -302,6 +302,8 @@ Gemini Gate Before GPT Pro: Codex must read a real `CCG_GEMINI_RESPONSE_FILE` co
 
 The helper enforces this gate with `--gemini-response-file <CCG_GEMINI_RESPONSE_FILE>` and `--gemini-summary-file <summary-file>` (or `--gemini-summary` for short diagnostics). It injects Gemini Gate Evidence into `prompt.md` and records `response_file`, `response_non_empty`, `response_chars`, `response_sha256`, and `summary` in `status.json`.
 
+The helper also adds Project Access Context to each GPT Pro prompt: project name, sanitized repository URL, branch, commit, and local clean/dirty status. ChatGPT Pro may use the repository URL through GitHub connector, Deep Research, or browsing when available, but it must cite exact file paths or commits and must not guess if the URL is inaccessible. Pasted task context, Gemini evidence, diffs, and file excerpts remain the source of truth because local changes may not exist on GitHub.
+
 `/ccg:gptpro-plan` has a Plan-only Boundary: it may produce or revise a plan, but must not execute implementation, apply product-code changes, commit, push, or create a pull request. Execution requires a later explicit `/ccg:execute <plan>` or `/ccg:codex-exec <plan>` request.
 
 The bridge writes local prompt and response files under `.codex/ccg/gptpro/`. After generating a prompt, Codex must pause at a manual handoff barrier: it does not paste the full generated prompt into chat, prints the preview URL and local artifact paths, tells the user to open the preview page and use the preview page Copy Prompt button, and stops the current turn. The preview page is served by a detached local helper so the user can manually paste the prompt into ChatGPT Pro and manually paste the response back into the local bridge page or response file.

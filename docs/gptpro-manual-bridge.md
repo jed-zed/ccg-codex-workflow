@@ -45,6 +45,28 @@ The helper injects Gemini Gate Evidence into `prompt.md` and records auditable p
 - `response_sha256`
 - `summary`
 
+## Project Access Context
+
+The prompt also includes a Project Access Context section so ChatGPT Pro can understand where the work lives.
+
+The helper auto-detects Git metadata when available:
+
+- project name
+- sanitized repository URL from `origin`
+- current branch
+- current commit
+- clean or dirty local status
+
+Codex may override the detected repository URL with:
+
+```text
+--repo-url <repository-url>
+```
+
+The helper sanitizes repository URLs before writing prompts or `status.json`; credentials, access tokens, cookies, and local filesystem paths must not be included as repository URLs.
+
+A GitHub URL is useful but not enough on its own. If ChatGPT Pro has GitHub connector, Deep Research, or browsing available, it may inspect the URL and cite exact file paths or commits. If it cannot access the URL, it must rely on the pasted CCG input, Gemini Gate Evidence, diffs, and file excerpts. Pasted context has priority because uncommitted local changes may not exist on GitHub.
+
 ## Hard Boundaries
 
 - Do not automate ChatGPT web login.
