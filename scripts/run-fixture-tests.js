@@ -883,6 +883,9 @@ cases = {
     "token": "https://ghp_secret@github.com/org/repo.git?token=abc#frag",
     "scp": "git@gitlab.example.com:org/repo.git",
     "github_scp": "git@github.com:org/repo.git",
+    "scp_query": "git@github.com:org/repo.git?token=abc",
+    "scp_fragment": "git@github.com:org/repo.git#frag",
+    "scp_query_fragment": "git@gitlab.example.com:org/repo.git?token=abc#frag",
     "ssh": "ssh://git@github.com/org/repo.git",
     "control": "https://github.com/org/repo.git\\nmalicious",
 }
@@ -915,6 +918,12 @@ print("HAS_GIT_ROOT=" + str("git_root" in context))
   assert(!result.stdout.includes("#frag"), `did not expect fragment in sanitizer output:\n${result.stdout}`);
   assert(output.scp === "https://gitlab.example.com/org/repo", `expected scp-like remote:\n${result.stdout}`);
   assert(output.github_scp === "https://github.com/org/repo", `expected GitHub scp remote:\n${result.stdout}`);
+  assert(output.scp_query === "https://github.com/org/repo", `expected scp query stripping:\n${result.stdout}`);
+  assert(output.scp_fragment === "https://github.com/org/repo", `expected scp fragment stripping:\n${result.stdout}`);
+  assert(
+    output.scp_query_fragment === "https://gitlab.example.com/org/repo",
+    `expected scp query and fragment stripping:\n${result.stdout}`
+  );
   assert(output.ssh === "https://github.com/org/repo", `expected ssh remote normalization:\n${result.stdout}`);
   assert(output.control === "", `expected control-char URL to be rejected:\n${result.stdout}`);
   assert(output.STATUS === "not_git", `expected non-git status to be not_git:\n${result.stdout}`);

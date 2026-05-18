@@ -108,7 +108,7 @@ def is_local_path_like(value: str) -> bool:
 
 
 def normalize_remote_path(path_value: str) -> str:
-    path = path_value.strip().lstrip("/").removesuffix(".git")
+    path = path_value.strip().split("?", 1)[0].split("#", 1)[0].lstrip("/").removesuffix(".git")
     if not path or path.startswith((".", "~")) or "\\" in path:
         return ""
     return path
