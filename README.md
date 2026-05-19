@@ -291,17 +291,17 @@ Detached Gemini calls also open the browser preview automatically. If Windows bl
 
 ## ChatGPT Pro Manual Bridge
 
-This plugin supports Codex + Gemini + GPT Pro planning, review, and execution-companion workflows through:
+This plugin supports Codex-led GPT Pro manual bridge workflows through:
 
 - `/ccg:gptpro-plan`
 - `/ccg:gptpro-review`
 - `/ccg:gptpro-exc`
 
-For `/ccg:gptpro-plan` and `/ccg:gptpro-review`, Codex first runs Gemini read-only analysis through the bundled Gemini preview helper. Codex then includes the Gemini response file path and a concise Gemini findings summary in the GPT Pro manual prompt. After the user saves the GPT Pro response, Codex must synthesize Codex, Gemini, and GPT Pro findings and remain the final owner.
+For `/ccg:gptpro-plan` and `/ccg:gptpro-review`, Codex keeps the Codex + Gemini + GPT Pro plan/review flow: Codex first runs Gemini read-only analysis through the bundled Gemini preview helper. Codex then includes the Gemini response file path and a concise Gemini findings summary in the GPT Pro manual prompt. After the user saves the GPT Pro response, Codex must synthesize Codex, Gemini, and GPT Pro findings and remain the final owner.
 
 Gemini Gate Before GPT Pro still applies to `/ccg:gptpro-plan` and `/ccg:gptpro-review`: Codex must read a real `CCG_GEMINI_RESPONSE_FILE` containing a non-empty Gemini response before creating those GPT Pro manual prompts. If required Gemini evidence fails, produces no response file, or writes an empty response, Codex stops in Chinese, does not create a GPT Pro bridge session, and must not invent Gemini findings.
 
-`/ccg:gptpro-exc` uses Gemini Evidence Modes instead of a required gate. Backend-only execution companion requests may create the manual bridge with `--gemini-policy optional --gemini-evidence-role frontend-prototype` and no Gemini response file. Frontend/full-stack requests should first run Gemini with `--prompt-template frontend`, then pass `--gemini-response-file <CCG_GEMINI_RESPONSE_FILE>` and `--gemini-summary-file <summary-file>` so the prompt includes Gemini Frontend Prototype Evidence.
+`/ccg:gptpro-exc` is different: Codex is the controller, Gemini only participates for frontend/full-stack frontend prototype or review evidence, GPT Pro is one manual second opinion, and Codex does the final landing. Backend-only execution companion requests may create the manual bridge with `--gemini-policy optional --gemini-evidence-role frontend-prototype` and no Gemini response file. Frontend/full-stack requests should first run Gemini with `--prompt-template frontend`, then pass `--gemini-response-file <CCG_GEMINI_RESPONSE_FILE>` and `--gemini-summary-file <summary-file>` so the prompt includes Gemini Frontend Prototype Evidence.
 
 The helper records Gemini provenance under `gemini_evidence` in `status.json`: `policy`, `role`, `available`, `response_file`, `response_non_empty`, `response_chars`, `response_sha256`, and `summary`. For required gate sessions it also injects Gemini Gate Evidence into `prompt.md`.
 

@@ -1559,7 +1559,19 @@ test("fixture:gptpro commands, skills, templates, doctor, and bridge coverage ex
     );
     assert(skillText.includes("do not invent Gemini findings"), `expected ${skill} to forbid fake Gemini summaries`);
     assert(skillText.includes("bundled Gemini preview helper"), `expected ${skill} to use bundled Gemini helper`);
-    assert(skillText.includes("synthesize Codex, Gemini, and GPT Pro"), `expected ${skill} to synthesize all models`);
+    if (skill === "ccg-gptpro-bridge") {
+      assert(
+        skillText.includes(
+          "synthesize Codex findings, Gemini evidence when present, and GPT Pro manual second opinion"
+        ),
+        `expected ${skill} to synthesize mode-aware evidence`
+      );
+    } else {
+      assert(
+        skillText.includes("synthesize Codex, Gemini, and GPT Pro"),
+        `expected ${skill} to synthesize all models`
+      );
+    }
     assert(skillText.includes("Do not read ChatGPT web DOM"), `expected ${skill} to forbid DOM reading`);
     assert(skillText.includes("Expected manual questions: 1"), `expected ${skill} to document expected budget`);
     assert(skillText.includes("Maximum manual questions: 2"), `expected ${skill} to document maximum budget`);
@@ -1580,14 +1592,36 @@ test("fixture:gptpro commands, skills, templates, doctor, and bridge coverage ex
     path.join(repoRoot, "plugins", "ccg", "skills", "ccg-gptpro-exc", "SKILL.md"),
     "utf8"
   );
-  assert(excSkillText.includes("Codex + Gemini + GPT Pro"), "expected gptpro-exc to define tri-model workflow");
+  assert(
+    excSkillText.includes("Codex-led execution-companion workflow"),
+    "expected gptpro-exc to define Codex-led workflow"
+  );
+  assert(
+    excSkillText.includes("Gemini only participates for frontend/full-stack"),
+    "expected gptpro-exc to limit Gemini to frontend/full-stack evidence"
+  );
+  assert(
+    excSkillText.includes("GPT Pro provides one manual second opinion"),
+    "expected gptpro-exc to define GPT Pro as a manual second opinion"
+  );
+  assert(
+    excSkillText.includes("Codex makes the final implementation"),
+    "expected gptpro-exc to keep Codex as final implementer"
+  );
+  assert(
+    !excSkillText.includes("Codex + Gemini + GPT Pro execution-companion workflow"),
+    "expected gptpro-exc not to define a fixed tri-model execution chain"
+  );
   assert(excSkillText.includes("Gemini Frontend Prototype Evidence"), "expected gptpro-exc frontend evidence");
   assert(excSkillText.includes("--prompt-template frontend"), "expected gptpro-exc to use frontend helper");
   assert(excSkillText.includes("--gemini-policy optional"), "expected gptpro-exc optional Gemini policy");
   assert(excSkillText.includes("frontend-review"), "expected gptpro-exc to mention frontend review evidence");
   assert(excSkillText.includes("do not invent Gemini findings"), "expected gptpro-exc to forbid fake Gemini findings");
   assert(excSkillText.includes("bundled Gemini preview helper"), "expected gptpro-exc to use bundled Gemini helper");
-  assert(excSkillText.includes("synthesize Codex, Gemini, and GPT Pro"), "expected gptpro-exc synthesis guidance");
+  assert(
+    excSkillText.includes("synthesize Codex, Gemini frontend evidence, and GPT Pro manual second opinion"),
+    "expected gptpro-exc synthesis guidance to name frontend evidence and manual second opinion"
+  );
   assert(excSkillText.includes("Do not read ChatGPT web DOM"), "expected gptpro-exc to forbid DOM reading");
   assert(excSkillText.includes("Expected manual questions: 1"), "expected gptpro-exc expected budget");
   assert(excSkillText.includes("Maximum manual questions: 2"), "expected gptpro-exc maximum budget");
@@ -1666,7 +1700,11 @@ test("fixture:gptpro commands, skills, templates, doctor, and bridge coverage ex
     path.join(repoRoot, "plugins", "ccg", "skills", "ccg-gptpro-bridge", "templates", "gptpro", "base.md"),
     "utf8"
   );
-  assert(baseTemplate.includes("Codex + Gemini + GPT Pro"), "expected GPT Pro base template to describe tri-model workflow");
+  assert(baseTemplate.includes("Codex-led CCG workflow"), "expected GPT Pro base template to describe Codex-led workflow");
+  assert(
+    baseTemplate.includes("do not assume Gemini participated unless a Gemini evidence section is present"),
+    "expected GPT Pro base template not to assume Gemini evidence"
+  );
   for (const template of ["plan", "review"]) {
     const templateText = fs.readFileSync(
       path.join(repoRoot, "plugins", "ccg", "skills", "ccg-gptpro-bridge", "templates", "gptpro", `${template}.md`),
