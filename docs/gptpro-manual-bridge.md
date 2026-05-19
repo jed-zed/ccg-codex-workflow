@@ -2,9 +2,9 @@
 
 ## Purpose
 
-The GPT Pro manual bridge gives Codex-native CCG workflows a user-mediated ChatGPT Pro second opinion for planning, review, and execution-companion analysis inside a Codex + Gemini + GPT Pro flow.
+The GPT Pro manual bridge gives Codex-native CCG workflows a user-mediated ChatGPT Pro second opinion for planning, review, and execution-companion analysis inside a Codex-led flow.
 
-Codex remains final owner. Gemini provides read-only helper evidence through the bundled Gemini preview helper when the mode requires or benefits from it. GPT Pro output is manual helper evidence only.
+Codex remains final owner. Gemini evidence mode depends on the command: required gate evidence for plan/review, and optional frontend/full-stack evidence for execution companion. GPT Pro output is manual helper evidence only.
 
 ## Gemini Evidence Modes
 
@@ -14,7 +14,7 @@ Codex remains final owner. Gemini provides read-only helper evidence through the
 - For plan/review, Codex runs Gemini before GPT Pro and includes Gemini Gate Evidence.
 - For execution companion frontend/full-stack tasks, Codex may run Gemini with `--prompt-template frontend` and include Gemini Frontend Prototype Evidence.
 - Codex stops at the manual handoff barrier and waits for the user to save GPT Pro output.
-- After the user saves GPT Pro output, Codex must synthesize Codex, Gemini, and GPT Pro findings in Chinese when Gemini evidence exists; otherwise it states that Gemini evidence was not used.
+- After the user saves GPT Pro output, Codex must synthesize Codex findings, Gemini evidence when present, and GPT Pro manual second opinion in Chinese; otherwise it states that Gemini evidence was not used.
 - Gemini and GPT Pro remain helper evidence only; Codex makes the final decision.
 
 ## Required Gemini Gate
@@ -155,7 +155,7 @@ Round 2 is only after Codex fixes blocker findings.
 
 ### `/ccg:gptpro-exc`
 
-Use this for a Codex + Gemini + GPT Pro read-only implementation companion workflow. Gemini is optional frontend prototype evidence here: backend-only requests can go straight to the manual GPT Pro bridge, while frontend/full-stack requests should run Gemini frontend helper first when useful.
+Use this for a Codex-led read-only implementation companion workflow: Codex controls implementation, Gemini only participates for frontend/full-stack frontend prototype or review evidence, GPT Pro provides one manual second opinion, and Codex makes the final implementation, verification, and delivery decision. Backend-only requests can go straight to the manual GPT Pro bridge, while frontend/full-stack requests should run Gemini frontend helper first when useful.
 
 Expected output from GPT Pro:
 
