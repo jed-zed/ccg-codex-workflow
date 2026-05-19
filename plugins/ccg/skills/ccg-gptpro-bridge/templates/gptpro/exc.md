@@ -2,7 +2,7 @@
 
 Provide read-only implementation companion advice.
 
-The input should include Codex's implementation context and any available Gemini findings. Compare them, call out disagreements, and help Codex choose the final implementation path.
+The input should include Codex's implementation context and may include Gemini Frontend Prototype Evidence for frontend or full-stack work. If that evidence exists, compare it with Codex's context, call out disagreements, and help Codex choose the final implementation path. If no Gemini frontend evidence is present, do not guess what Gemini would have said.
 
 ## Expected Output
 

@@ -754,7 +754,9 @@ test("Gemini prompt templates are bundled and referenced", () => {
   assert(base.includes("read-only"), "expected read-only boundary in base template");
   assert(base.includes("original CCG"), "expected original CCG provenance in base template");
   const prototype = fs.readFileSync(path.join(geminiTemplateDir, "prototype.md"), "utf8");
-  assert(prototype.includes("Unified Diff Patch"), "expected prototype template to request unified diff patches");
+  assert(prototype.includes("Unified Diff Patch ONLY"), "expected prototype template to request diff-only patches");
+  assert(!prototype.includes("Also include:"), "did not expect prose-output block in diff-only prototype template");
+  assert(!prototype.includes("Assumptions made"), "did not expect assumptions prose in diff-only prototype template");
   const executorSkill = fs.readFileSync(ccgExecutorSkill, "utf8");
   assert(executorSkill.includes("--prompt-template"), "expected executor skill to document prompt templates");
   for (const name of ["analyzer", "architect", "debugger", "optimizer", "tester"]) {
@@ -1030,6 +1032,194 @@ test("fixture:gptpro-bridge refuses empty Gemini response file", () => {
     `expected empty Gemini response error:\n${result.stdout}\n${result.stderr}`
   );
   assert(!fs.existsSync(outputRoot), "did not expect session artifacts with empty Gemini response");
+});
+
+test("fixture:gptpro-bridge forbids plan/review Gemini gate policy overrides", () => {
+  for (const scenario of [
+    { mode: "plan", policy: "none", role: "gate" },
+    { mode: "review", policy: "optional", role: "frontend-review" },
+  ]) {
+    const dir = tempDir(`ccg-gptpro-${scenario.mode}-policy-override-`);
+    const outputRoot = path.join(dir, ".codex", "ccg", "gptpro");
+    const result = run(
+      python,
+      [
+        gptproBridge,
+        "--mode",
+        scenario.mode,
+        "--workdir",
+        dir,
+        "--prompt",
+        `${scenario.mode} should not bypass Gemini Gate.`,
+        "--slug",
+        `${scenario.mode}-policy-override`,
+        "--output-root",
+        outputRoot,
+        "--gemini-policy",
+        scenario.policy,
+        "--gemini-evidence-role",
+        scenario.role,
+        "--hold-seconds",
+        "0",
+      ],
+      { allowFailure: true }
+    );
+    assert(result.status !== 0, `expected ${scenario.mode} ${scenario.policy}/${scenario.role} override to fail`);
+    assert(
+      (result.stderr + result.stdout).includes("Gemini Gate Before GPT Pro is required for plan/review sessions"),
+      `expected plan/review gate policy error:\n${result.stdout}\n${result.stderr}`
+    );
+    assert(!fs.existsSync(outputRoot), `did not expect ${scenario.mode} session artifacts after policy override`);
+  }
+});
+
+test("fixture:gptpro-bridge allows exc sessions without Gemini frontend evidence", () => {
+  const dir = tempDir("ccg-gptpro-exc-no-gemini-");
+  const outputRoot = path.join(dir, ".codex", "ccg", "gptpro");
+  const result = run(python, [
+    gptproBridge,
+    "--mode",
+    "exc",
+    "--workdir",
+    dir,
+    "--prompt",
+    "Implement a backend-only validation helper.",
+    "--slug",
+    "backend-only",
+    "--output-root",
+    outputRoot,
+    "--hold-seconds",
+    "0",
+  ]);
+  const sessionLine = result.stdout.split(/\r?\n/).find((line) => line.startsWith("CCG_GPTPRO_SESSION_DIR="));
+  assert(sessionLine, `expected session dir in stdout:\n${result.stdout}`);
+  const sessionDir = sessionLine.split("=").slice(1).join("=");
+  const status = JSON.parse(fs.readFileSync(path.join(sessionDir, "status.json"), "utf8"));
+  const prompt = fs.readFileSync(path.join(sessionDir, "round-1", "prompt.md"), "utf8");
+  assert(status.gemini_evidence.policy === "optional", "expected optional Gemini evidence policy for exc");
+  assert(status.gemini_evidence.role === "frontend-prototype", "expected frontend prototype role for exc");
+  assert(status.gemini_evidence.available === false, "expected unavailable Gemini evidence");
+  assert(!prompt.includes("## Gemini Gate Evidence"), "did not expect gate evidence in backend-only exc prompt");
+  assert(prompt.includes("Implement a backend-only validation helper."), "expected original prompt to be preserved");
+});
+
+test("fixture:gptpro-bridge injects frontend prototype evidence for exc sessions", () => {
+  const dir = tempDir("ccg-gptpro-exc-frontend-evidence-");
+  const outputRoot = path.join(dir, ".codex", "ccg", "gptpro");
+  const gemini = createGeminiGateFixture(
+    dir,
+    "Gemini frontend prototype: move the toolbar into a responsive flex row.",
+    "Use a responsive flex toolbar and verify keyboard focus order."
+  );
+  const result = run(python, [
+    gptproBridge,
+    "--mode",
+    "exc",
+    "--workdir",
+    dir,
+    "--prompt",
+    "Implement the editor toolbar UI.",
+    "--slug",
+    "toolbar-ui",
+    "--output-root",
+    outputRoot,
+    ...gemini.args,
+    "--hold-seconds",
+    "0",
+  ]);
+  const sessionLine = result.stdout.split(/\r?\n/).find((line) => line.startsWith("CCG_GPTPRO_SESSION_DIR="));
+  assert(sessionLine, `expected session dir in stdout:\n${result.stdout}`);
+  const sessionDir = sessionLine.split("=").slice(1).join("=");
+  const status = JSON.parse(fs.readFileSync(path.join(sessionDir, "status.json"), "utf8"));
+  const prompt = fs.readFileSync(path.join(sessionDir, "round-1", "prompt.md"), "utf8");
+  assert(status.gemini_evidence.policy === "optional", "expected optional policy for exc frontend evidence");
+  assert(status.gemini_evidence.role === "frontend-prototype", "expected frontend prototype evidence role");
+  assert(status.gemini_evidence.available === true, "expected available Gemini evidence");
+  assert(prompt.includes("## Gemini Frontend Prototype Evidence"), "expected frontend evidence section");
+  assert(!prompt.includes("## Gemini Gate Evidence"), "did not expect gate evidence title for exc frontend evidence");
+  assert(prompt.includes("Use a responsive flex toolbar"), "expected Gemini frontend summary in prompt");
+});
+
+test("fixture:gptpro-bridge refuses empty optional Gemini evidence for exc sessions", () => {
+  const dir = tempDir("ccg-gptpro-exc-empty-gemini-");
+  const outputRoot = path.join(dir, ".codex", "ccg", "gptpro");
+  const responseFile = path.join(dir, "empty-gemini.md");
+  writeFile(responseFile, "  \n\t ");
+  const result = run(
+    python,
+    [
+      gptproBridge,
+      "--mode",
+      "exc",
+      "--workdir",
+      dir,
+      "--prompt",
+      "Implement frontend layout.",
+      "--slug",
+      "empty-exc-gemini",
+      "--output-root",
+      outputRoot,
+      "--gemini-response-file",
+      responseFile,
+      "--gemini-summary",
+      "Gemini frontend summary.",
+      "--hold-seconds",
+      "0",
+    ],
+    { allowFailure: true }
+  );
+  assert(result.status !== 0, "expected empty optional Gemini evidence to fail");
+  assert(
+    (result.stderr + result.stdout).includes("Gemini response file is empty"),
+    `expected empty Gemini response error:\n${result.stdout}\n${result.stderr}`
+  );
+  assert(!fs.existsSync(outputRoot), "did not expect session artifacts with empty optional Gemini evidence");
+});
+
+test("fixture:gptpro-bridge followup inherits unavailable Gemini evidence", () => {
+  const dir = tempDir("ccg-gptpro-exc-followup-no-gemini-");
+  const outputRoot = path.join(dir, ".codex", "ccg", "gptpro");
+  const first = run(python, [
+    gptproBridge,
+    "--mode",
+    "exc",
+    "--workdir",
+    dir,
+    "--prompt",
+    "Implement a backend-only task.",
+    "--slug",
+    "backend-followup",
+    "--output-root",
+    outputRoot,
+    "--hold-seconds",
+    "0",
+  ]);
+  const sessionLine = first.stdout.split(/\r?\n/).find((line) => line.startsWith("CCG_GPTPRO_SESSION_DIR="));
+  assert(sessionLine, `expected first session dir in stdout:\n${first.stdout}`);
+  const sessionDir = sessionLine.split("=").slice(1).join("=");
+  const second = run(python, [
+    gptproBridge,
+    "--mode",
+    "exc",
+    "--workdir",
+    dir,
+    "--prompt",
+    "Follow up on backend-only implementation risks.",
+    "--round",
+    "2",
+    "--followup-session",
+    sessionDir,
+    "--followup-reason",
+    "Manual GPT Pro response needs one clarification.",
+    "--hold-seconds",
+    "0",
+  ]);
+  assert(second.stdout.includes("CCG_GPTPRO_ROUND=2"), `expected round 2 output:\n${second.stdout}`);
+  const status = JSON.parse(fs.readFileSync(path.join(sessionDir, "status.json"), "utf8"));
+  const prompt = fs.readFileSync(path.join(sessionDir, "round-2", "prompt.md"), "utf8");
+  assert(status.gemini_evidence.available === false, "expected unavailable evidence to be inherited");
+  assert(status.gemini_evidence.inherited_from_round === 1, "expected inherited evidence marker");
+  assert(!prompt.includes("## Gemini Gate Evidence"), "did not expect gate evidence in followup prompt");
 });
 
 test("fixture:gptpro-bridge prints full manual prompt when requested", () => {
@@ -1356,7 +1546,7 @@ test("fixture:gptpro commands, skills, templates, doctor, and bridge coverage ex
     );
   }
 
-  for (const skill of ["ccg-gptpro-plan", "ccg-gptpro-review", "ccg-gptpro-exc", "ccg-gptpro-bridge"]) {
+  for (const skill of ["ccg-gptpro-plan", "ccg-gptpro-review", "ccg-gptpro-bridge"]) {
     const skillText = fs.readFileSync(path.join(repoRoot, "plugins", "ccg", "skills", skill, "SKILL.md"), "utf8");
     assert(skillText.includes("Codex + Gemini + GPT Pro"), `expected ${skill} to define tri-model workflow`);
     assert(skillText.includes("Run Gemini before GPT Pro"), `expected ${skill} to require Gemini before GPT Pro`);
@@ -1386,6 +1576,30 @@ test("fixture:gptpro commands, skills, templates, doctor, and bridge coverage ex
     assert(skillText.includes("response_saved=true"), `expected ${skill} to require saved response before continuing`);
     assert(skillText.includes("response.md is non-empty"), `expected ${skill} to require non-empty response`);
   }
+  const excSkillText = fs.readFileSync(
+    path.join(repoRoot, "plugins", "ccg", "skills", "ccg-gptpro-exc", "SKILL.md"),
+    "utf8"
+  );
+  assert(excSkillText.includes("Codex + Gemini + GPT Pro"), "expected gptpro-exc to define tri-model workflow");
+  assert(excSkillText.includes("Gemini Frontend Prototype Evidence"), "expected gptpro-exc frontend evidence");
+  assert(excSkillText.includes("--prompt-template frontend"), "expected gptpro-exc to use frontend helper");
+  assert(excSkillText.includes("--gemini-policy optional"), "expected gptpro-exc optional Gemini policy");
+  assert(excSkillText.includes("frontend-review"), "expected gptpro-exc to mention frontend review evidence");
+  assert(excSkillText.includes("do not invent Gemini findings"), "expected gptpro-exc to forbid fake Gemini findings");
+  assert(excSkillText.includes("bundled Gemini preview helper"), "expected gptpro-exc to use bundled Gemini helper");
+  assert(excSkillText.includes("synthesize Codex, Gemini, and GPT Pro"), "expected gptpro-exc synthesis guidance");
+  assert(excSkillText.includes("Do not read ChatGPT web DOM"), "expected gptpro-exc to forbid DOM reading");
+  assert(excSkillText.includes("Expected manual questions: 1"), "expected gptpro-exc expected budget");
+  assert(excSkillText.includes("Maximum manual questions: 2"), "expected gptpro-exc maximum budget");
+  assert(excSkillText.includes("Manual Handoff Barrier"), "expected gptpro-exc manual handoff barrier");
+  assert(
+    excSkillText.includes("Do not paste the full generated prompt into chat"),
+    "expected gptpro-exc to avoid pasting full prompts in chat"
+  );
+  assert(excSkillText.includes("preview page Copy Prompt"), "expected gptpro-exc preview copy guidance");
+  assert(excSkillText.includes("End the current assistant turn"), "expected gptpro-exc to stop after manual handoff");
+  assert(excSkillText.includes("response_saved=true"), "expected gptpro-exc to require saved response before continuing");
+  assert(excSkillText.includes("response.md is non-empty"), "expected gptpro-exc to require non-empty response");
   const bridgeSkillText = fs.readFileSync(
     path.join(repoRoot, "plugins", "ccg", "skills", "ccg-gptpro-bridge", "SKILL.md"),
     "utf8"
@@ -1453,13 +1667,25 @@ test("fixture:gptpro commands, skills, templates, doctor, and bridge coverage ex
     "utf8"
   );
   assert(baseTemplate.includes("Codex + Gemini + GPT Pro"), "expected GPT Pro base template to describe tri-model workflow");
-  for (const template of ["plan", "review", "exc"]) {
+  for (const template of ["plan", "review"]) {
     const templateText = fs.readFileSync(
       path.join(repoRoot, "plugins", "ccg", "skills", "ccg-gptpro-bridge", "templates", "gptpro", `${template}.md`),
       "utf8"
     );
     assert(templateText.includes("Gemini findings"), `expected GPT Pro ${template} template to compare Gemini findings`);
   }
+  const excTemplate = fs.readFileSync(
+    path.join(repoRoot, "plugins", "ccg", "skills", "ccg-gptpro-bridge", "templates", "gptpro", "exc.md"),
+    "utf8"
+  );
+  assert(
+    excTemplate.includes("Gemini Frontend Prototype Evidence"),
+    "expected GPT Pro exc template to compare frontend prototype evidence"
+  );
+  assert(
+    excTemplate.includes("do not guess what Gemini would have said"),
+    "expected GPT Pro exc template to forbid invented Gemini conclusions"
+  );
   assert(docs.includes("No DOM extraction"), "expected docs to explain DOM boundary");
   assert(doctor.includes("GPT Pro manual bridge"), "expected doctor summary");
 });
