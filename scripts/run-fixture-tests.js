@@ -1545,6 +1545,29 @@ test("fixture:gptpro commands, skills, templates, doctor, and bridge coverage ex
       `expected doctor coverage for ${command}`
     );
   }
+  const excCommandText = fs.readFileSync(
+    path.join(repoRoot, "plugins", "ccg", "commands", "gptpro-exc.md"),
+    "utf8"
+  );
+  for (const [label, text] of [
+    ["gptpro-exc command", excCommandText],
+    ["command index", ccgCommand],
+    ["skill index", ccgSkill],
+  ]) {
+    assert(text.includes("Codex-led"), `expected ${label} to describe gptpro-exc as Codex-led`);
+    assert(
+      text.includes("GPT Pro") && text.includes("manual second opinion"),
+      `expected ${label} to describe GPT Pro as a manual second opinion`
+    );
+    assert(
+      !text.includes("Codex + Gemini + GPT Pro execution companion"),
+      `expected ${label} not to describe gptpro-exc as a fixed tri-model execution chain`
+    );
+  }
+  assert(
+    !excCommandText.includes("Codex must run Gemini read-only execution-companion analysis"),
+    "expected gptpro-exc command not to require Gemini for all execution-companion sessions"
+  );
 
   for (const skill of ["ccg-gptpro-plan", "ccg-gptpro-review", "ccg-gptpro-bridge"]) {
     const skillText = fs.readFileSync(path.join(repoRoot, "plugins", "ccg", "skills", skill, "SKILL.md"), "utf8");

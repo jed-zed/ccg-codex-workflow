@@ -314,6 +314,10 @@ function validateGptProManualBridge() {
     fail("GPT Pro exc template must forbid invented Gemini conclusions");
   }
 
+  const excCommand = fs.readFileSync(
+    path.join(repoRoot, "plugins/ccg/commands/gptpro-exc.md"),
+    "utf8"
+  );
   const excSkill = fs.readFileSync(
     path.join(repoRoot, "plugins/ccg/skills/ccg-gptpro-exc/SKILL.md"),
     "utf8"
@@ -339,6 +343,23 @@ function validateGptProManualBridge() {
   const doctor = fs.readFileSync(path.join(repoRoot, "plugins/ccg/scripts/doctor.ps1"), "utf8");
   const fixtures = fs.readFileSync(path.join(repoRoot, "scripts/run-fixture-tests.js"), "utf8");
   const workflow = fs.readFileSync(path.join(repoRoot, ".github/workflows/ci.yml"), "utf8");
+
+  for (const [label, text] of [
+    ["gptpro-exc command", excCommand],
+    ["command index", ccgCommand],
+    ["skill index", ccgSkill],
+  ]) {
+    if (!text.includes("Codex-led")) fail(`${label} must describe gptpro-exc as Codex-led`);
+    if (!text.includes("GPT Pro") || !text.includes("manual second opinion")) {
+      fail(`${label} must describe GPT Pro as a manual second opinion`);
+    }
+    if (text.includes("Codex + Gemini + GPT Pro execution companion")) {
+      fail(`${label} must not describe gptpro-exc as a fixed tri-model execution chain`);
+    }
+  }
+  if (excCommand.includes("Codex must run Gemini read-only execution-companion analysis")) {
+    fail("gptpro-exc command must not require Gemini for all execution-companion sessions");
+  }
 
   for (const command of gptproCommands) {
     for (const [label, text, expected] of [
