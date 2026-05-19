@@ -230,6 +230,14 @@ def normalize_gemini_evidence_role(role: str) -> str:
     return normalized
 
 
+def validate_mode_gemini_policy(mode: str, policy: str, role: str) -> None:
+    if mode in {"plan", "review"} and (policy != "required" or role != "gate"):
+        raise ValueError(
+            "Gemini Gate Before GPT Pro is required for plan/review sessions; "
+            "use --gemini-policy required --gemini-evidence-role gate."
+        )
+
+
 def empty_gemini_evidence(policy: str, role: str) -> dict[str, Any]:
     return {
         "required": policy == "required",
@@ -512,10 +520,11 @@ def create_session(
         raise ValueError("Round 2 requires --followup-session. Create round 1 first.")
 
     workdir_path = Path(workdir).resolve()
-    output_root_path = resolve_output_root(workdir_path, Path(output_root)).resolve()
-    output_root_path.mkdir(parents=True, exist_ok=True)
     policy = normalize_gemini_policy(gemini_policy or default_gemini_policy(mode))
     role = normalize_gemini_evidence_role(gemini_evidence_role or default_gemini_evidence_role(mode))
+    validate_mode_gemini_policy(mode, policy, role)
+    output_root_path = resolve_output_root(workdir_path, Path(output_root)).resolve()
+    output_root_path.mkdir(parents=True, exist_ok=True)
     if gemini_evidence is None and gemini_gate is not None:
         gemini_evidence = gemini_gate
 
@@ -983,6 +992,9 @@ def main(argv: list[str] | None = None) -> int:
         raw_prompt = read_prompt(args.prompt, args.prompt_file)
         gemini_policy = args.gemini_policy or default_gemini_policy(args.mode)
         gemini_evidence_role = args.gemini_evidence_role or default_gemini_evidence_role(args.mode)
+        gemini_policy = normalize_gemini_policy(gemini_policy)
+        gemini_evidence_role = normalize_gemini_evidence_role(gemini_evidence_role)
+        validate_mode_gemini_policy(args.mode, gemini_policy, gemini_evidence_role)
         gemini_evidence = None
         has_gemini_args = bool(args.gemini_response_file or args.gemini_summary or args.gemini_summary_file)
         if has_gemini_args or not args.followup_session:

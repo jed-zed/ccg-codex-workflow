@@ -754,7 +754,9 @@ test("Gemini prompt templates are bundled and referenced", () => {
   assert(base.includes("read-only"), "expected read-only boundary in base template");
   assert(base.includes("original CCG"), "expected original CCG provenance in base template");
   const prototype = fs.readFileSync(path.join(geminiTemplateDir, "prototype.md"), "utf8");
-  assert(prototype.includes("Unified Diff Patch"), "expected prototype template to request unified diff patches");
+  assert(prototype.includes("Unified Diff Patch ONLY"), "expected prototype template to request diff-only patches");
+  assert(!prototype.includes("Also include:"), "did not expect prose-output block in diff-only prototype template");
+  assert(!prototype.includes("Assumptions made"), "did not expect assumptions prose in diff-only prototype template");
   const executorSkill = fs.readFileSync(ccgExecutorSkill, "utf8");
   assert(executorSkill.includes("--prompt-template"), "expected executor skill to document prompt templates");
   for (const name of ["analyzer", "architect", "debugger", "optimizer", "tester"]) {
@@ -1030,6 +1032,45 @@ test("fixture:gptpro-bridge refuses empty Gemini response file", () => {
     `expected empty Gemini response error:\n${result.stdout}\n${result.stderr}`
   );
   assert(!fs.existsSync(outputRoot), "did not expect session artifacts with empty Gemini response");
+});
+
+test("fixture:gptpro-bridge forbids plan/review Gemini gate policy overrides", () => {
+  for (const scenario of [
+    { mode: "plan", policy: "none", role: "gate" },
+    { mode: "review", policy: "optional", role: "frontend-review" },
+  ]) {
+    const dir = tempDir(`ccg-gptpro-${scenario.mode}-policy-override-`);
+    const outputRoot = path.join(dir, ".codex", "ccg", "gptpro");
+    const result = run(
+      python,
+      [
+        gptproBridge,
+        "--mode",
+        scenario.mode,
+        "--workdir",
+        dir,
+        "--prompt",
+        `${scenario.mode} should not bypass Gemini Gate.`,
+        "--slug",
+        `${scenario.mode}-policy-override`,
+        "--output-root",
+        outputRoot,
+        "--gemini-policy",
+        scenario.policy,
+        "--gemini-evidence-role",
+        scenario.role,
+        "--hold-seconds",
+        "0",
+      ],
+      { allowFailure: true }
+    );
+    assert(result.status !== 0, `expected ${scenario.mode} ${scenario.policy}/${scenario.role} override to fail`);
+    assert(
+      (result.stderr + result.stdout).includes("Gemini Gate Before GPT Pro is required for plan/review sessions"),
+      `expected plan/review gate policy error:\n${result.stdout}\n${result.stderr}`
+    );
+    assert(!fs.existsSync(outputRoot), `did not expect ${scenario.mode} session artifacts after policy override`);
+  }
 });
 
 test("fixture:gptpro-bridge allows exc sessions without Gemini frontend evidence", () => {

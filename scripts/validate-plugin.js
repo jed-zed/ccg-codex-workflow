@@ -163,7 +163,14 @@ function validateGeminiTemplates() {
   const prototypeTemplate = fs.readFileSync(path.join(templateDir, "prototype.md"), "utf8");
   const reviewTemplate = fs.readFileSync(path.join(templateDir, "review.md"), "utf8");
   if (!frontendTemplate.includes("UI/UX analysis")) fail("frontend Gemini template must describe UI/UX analysis");
-  if (!prototypeTemplate.includes("Unified Diff Patch")) fail("prototype Gemini template must mention Unified Diff Patch");
+  if (!prototypeTemplate.includes("Unified Diff Patch ONLY")) {
+    fail("prototype Gemini template must require Unified Diff Patch ONLY");
+  }
+  for (const phrase of ["Also include:", "Assumptions made"]) {
+    if (prototypeTemplate.includes(phrase)) {
+      fail(`prototype Gemini template must not request prose outside diff-only output: ${phrase}`);
+    }
+  }
   if (!reviewTemplate.includes("bounded second-pass code review")) {
     fail("review Gemini template must describe bounded second-pass code review");
   }
