@@ -5,9 +5,9 @@ description: Shared manual ChatGPT Pro bridge for CCG planning, review, and exec
 
 # CCG GPT Pro Manual Bridge
 
-This manual bridge lets the user manually ask ChatGPT Pro inside a Codex + Gemini + GPT Pro CCG workflow.
+This manual bridge lets the user manually ask ChatGPT Pro inside a Codex-led CCG workflow.
 
-Codex remains final owner. Gemini provides automatic read-only helper analysis through the bundled Gemini preview helper. GPT Pro provides a user-mediated manual second opinion.
+Codex remains final owner. Gemini evidence mode depends on the command: required gate evidence for plan/review, and optional frontend/full-stack evidence for execution companion. GPT Pro provides a user-mediated manual second opinion.
 
 ## Hard Boundaries
 
@@ -34,9 +34,9 @@ Each GPT Pro bridge command is designed to complete in one manual ChatGPT Pro qu
 
 Gemini and GPT Pro remain helper evidence only; Codex makes the final decision.
 
-- For `/ccg:gptpro-plan` and `/ccg:gptpro-review`, Run Gemini before GPT Pro and keep the Gemini Gate Before GPT Pro requirement.
-- For `/ccg:gptpro-exc`, Gemini is conditional frontend evidence: backend-only tasks may omit it, while frontend/full-stack tasks should use the bundled Gemini preview helper with `--prompt-template frontend`.
-- After the user saves GPT Pro output, synthesize Codex, Gemini, and GPT Pro findings in Chinese when Gemini evidence exists; otherwise state that Gemini evidence was not used.
+- For `/ccg:gptpro-plan` and `/ccg:gptpro-review`, keep the Codex + Gemini + GPT Pro plan/review flow: Run Gemini before GPT Pro and keep the Gemini Gate Before GPT Pro requirement.
+- For `/ccg:gptpro-exc`, Gemini is conditional frontend evidence only: backend-only tasks should omit it, while frontend/full-stack tasks should use the bundled Gemini preview helper with `--prompt-template frontend`.
+- After the user saves GPT Pro output, synthesize Codex findings, Gemini evidence when present, and GPT Pro manual second opinion in Chinese; otherwise state that Gemini evidence was not used.
 
 ### Required Gate For Plan And Review
 
@@ -59,7 +59,7 @@ Use `--gemini-summary "<summary>"` only for short diagnostic or fixture calls. T
 
 ### Optional Frontend Evidence For Execution Companion
 
-For `/ccg:gptpro-exc`, use optional frontend evidence:
+For `/ccg:gptpro-exc`, use optional frontend evidence. Backend-only execution-companion sessions should omit Gemini evidence. Frontend/full-stack sessions should pass real Gemini frontend prototype evidence when it is available:
 
 ```text
 --gemini-policy optional --gemini-evidence-role frontend-prototype

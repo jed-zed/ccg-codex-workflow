@@ -14,9 +14,9 @@ The user invoked:
 
 Use the installed CCG plugin skill `ccg:gptpro-exc`.
 
-Generate a Codex + Gemini + GPT Pro helper prompt for implementation sketches, patch proposals, edge cases, or test ideas.
+Generate a Codex-led GPT Pro execution-companion helper prompt for implementation sketches, patch proposals, edge cases, or test ideas.
 
-Codex must run Gemini read-only execution-companion analysis through the bundled preview helper before generating the GPT Pro manual prompt. The GPT Pro prompt must include the Gemini response file path and a concise Gemini findings summary.
+Codex is the controller and final implementer. GPT Pro provides one manual second opinion only. Gemini is optional frontend/full-stack evidence only: backend-only sessions should not run Gemini by default; frontend/full-stack sessions should run the bundled Gemini preview helper with `--prompt-template frontend` when frontend prototype evidence is needed. If Gemini evidence is included, it must come from a real, non-empty response file with a concise summary; do not invent Gemini findings.
 
 Expected manual ChatGPT Pro questions: 1.
 Maximum manual ChatGPT Pro questions: 2.
