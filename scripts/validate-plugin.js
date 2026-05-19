@@ -158,6 +158,15 @@ function validateGeminiTemplates() {
   ]) {
     if (!executorSkill.includes(phrase)) fail(`ccg-executor skill is missing preview-helper rule: ${phrase}`);
   }
+
+  const frontendTemplate = fs.readFileSync(path.join(templateDir, "frontend.md"), "utf8");
+  const prototypeTemplate = fs.readFileSync(path.join(templateDir, "prototype.md"), "utf8");
+  const reviewTemplate = fs.readFileSync(path.join(templateDir, "review.md"), "utf8");
+  if (!frontendTemplate.includes("UI/UX analysis")) fail("frontend Gemini template must describe UI/UX analysis");
+  if (!prototypeTemplate.includes("Unified Diff Patch")) fail("prototype Gemini template must mention Unified Diff Patch");
+  if (!reviewTemplate.includes("bounded second-pass code review")) {
+    fail("review Gemini template must describe bounded second-pass code review");
+  }
   console.log("gemini templates ok");
 }
 
@@ -202,6 +211,9 @@ function validateGptProManualBridge() {
     "non-empty Gemini response",
     "do not create a GPT Pro bridge session",
     "do not invent Gemini findings",
+    "Gemini Evidence Modes",
+    "Gemini Frontend Prototype Evidence",
+    "frontend-prototype",
     "bundled Gemini preview helper",
     "synthesize Codex, Gemini, and GPT Pro",
     "Manual Handoff Barrier",
@@ -238,13 +250,18 @@ function validateGptProManualBridge() {
     "detach-preview",
     "--gemini-response-file",
     "--gemini-summary-file",
+    "--gemini-policy",
+    "--gemini-evidence-role",
     "--repo-url",
     "read_gemini_gate",
+    "read_gemini_evidence",
     "detect_project_context",
     "sanitize_repository_url",
     "response_sha256",
     "project_context",
+    "gemini_evidence",
     "Gemini Gate Evidence",
+    "Gemini Frontend Prototype Evidence",
     "Project Access Context",
     "webbrowser.open(\"https://chatgpt.com/\")",
   ]) {
@@ -264,7 +281,7 @@ function validateGptProManualBridge() {
   if (!baseTemplate.includes("Pasted CCG input")) {
     fail("GPT Pro base template must prioritize pasted context over repository URL content");
   }
-  for (const template of ["plan", "review", "exc"]) {
+  for (const template of ["plan", "review"]) {
     const templateText = fs.readFileSync(
       path.join(repoRoot, `plugins/ccg/skills/ccg-gptpro-bridge/templates/gptpro/${template}.md`),
       "utf8"
@@ -272,6 +289,16 @@ function validateGptProManualBridge() {
     if (!templateText.includes("Gemini findings")) {
       fail(`GPT Pro ${template} template must ask GPT Pro to compare Gemini findings`);
     }
+  }
+  const excTemplate = fs.readFileSync(
+    path.join(repoRoot, "plugins/ccg/skills/ccg-gptpro-bridge/templates/gptpro/exc.md"),
+    "utf8"
+  );
+  if (!excTemplate.includes("Gemini Frontend Prototype Evidence")) {
+    fail("GPT Pro exc template must describe optional frontend prototype evidence");
+  }
+  if (!excTemplate.includes("do not guess what Gemini would have said")) {
+    fail("GPT Pro exc template must forbid invented Gemini conclusions");
   }
 
   const ccgCommand = fs.readFileSync(path.join(repoRoot, "plugins/ccg/commands/ccg.md"), "utf8");

@@ -4,46 +4,58 @@
 
 The GPT Pro manual bridge gives Codex-native CCG workflows a user-mediated ChatGPT Pro second opinion for planning, review, and execution-companion analysis inside a Codex + Gemini + GPT Pro flow.
 
-Codex remains final owner. Gemini provides automatic read-only helper analysis through the bundled Gemini preview helper. GPT Pro output is manual helper evidence only.
+Codex remains final owner. Gemini provides read-only helper evidence through the bundled Gemini preview helper when the mode requires or benefits from it. GPT Pro output is manual helper evidence only.
 
-## Tri-model Order
+## Gemini Evidence Modes
 
-Run Gemini before GPT Pro.
+`/ccg:gptpro-plan` and `/ccg:gptpro-review` keep the required Gemini Gate Before GPT Pro. `/ccg:gptpro-exc` uses optional frontend evidence so backend-only execution companion requests do not need a Gemini response file.
 
 - Codex gathers the task, local context, relevant diff or plan evidence, and its preliminary analysis.
-- Codex runs Gemini through the bundled Gemini preview helper.
-- Codex includes the Gemini response file path and a concise Gemini findings summary in the GPT Pro manual prompt.
+- For plan/review, Codex runs Gemini before GPT Pro and includes Gemini Gate Evidence.
+- For execution companion frontend/full-stack tasks, Codex may run Gemini with `--prompt-template frontend` and include Gemini Frontend Prototype Evidence.
 - Codex stops at the manual handoff barrier and waits for the user to save GPT Pro output.
-- After the user saves GPT Pro output, Codex must synthesize Codex, Gemini, and GPT Pro findings in Chinese.
+- After the user saves GPT Pro output, Codex must synthesize Codex, Gemini, and GPT Pro findings in Chinese when Gemini evidence exists; otherwise it states that Gemini evidence was not used.
 - Gemini and GPT Pro remain helper evidence only; Codex makes the final decision.
 
-## Gemini Gate Before GPT Pro
+## Required Gemini Gate
 
-Before creating a GPT Pro manual prompt, Codex must have:
+Before creating a GPT Pro manual prompt for `/ccg:gptpro-plan` or `/ccg:gptpro-review`, Codex must have:
 
 - a successful Gemini helper launch through the bundled preview helper;
 - a real `CCG_GEMINI_RESPONSE_FILE` path;
 - a non-empty Gemini response read from that file;
 - a concise Gemini findings summary derived from that response file.
 
-If Gemini fails, does not produce a response file, or writes an empty response, stop in Chinese and do not create a GPT Pro bridge session. Do not invent Gemini findings.
+If required Gemini evidence fails, does not produce a response file, or writes an empty response, stop in Chinese and do not create a GPT Pro bridge session. Do not invent Gemini findings.
 
 The helper enforces this with:
 
 ```text
---gemini-response-file <CCG_GEMINI_RESPONSE_FILE>
---gemini-summary-file <summary-file>
+--gemini-policy required --gemini-evidence-role gate --gemini-response-file <CCG_GEMINI_RESPONSE_FILE> --gemini-summary-file <summary-file>
 ```
 
 For short diagnostics or fixtures, `--gemini-summary "<summary>"` may be used instead of a summary file.
 
-The helper injects Gemini Gate Evidence into `prompt.md` and records auditable provenance in `status.json`:
+The helper injects Gemini Gate Evidence into `prompt.md` and records auditable provenance in `status.json` under `gemini_evidence`:
 
+- `policy`
+- `role`
+- `available`
 - `response_file`
 - `response_non_empty`
 - `response_chars`
 - `response_sha256`
 - `summary`
+
+## Optional Frontend Evidence
+
+For `/ccg:gptpro-exc`, use:
+
+```text
+--gemini-policy optional --gemini-evidence-role frontend-prototype
+```
+
+If a frontend/full-stack task has Gemini output, also pass `--gemini-response-file <CCG_GEMINI_RESPONSE_FILE> --gemini-summary-file <summary-file>`. The helper injects Gemini Frontend Prototype Evidence. If no Gemini response file is provided, the helper creates the bridge session and records `gemini_evidence.available=false`.
 
 ## Project Access Context
 
@@ -65,7 +77,7 @@ Codex may override the detected repository URL with:
 
 The helper sanitizes repository URLs before writing prompts or `status.json`; credentials, access tokens, cookies, and local filesystem paths must not be included as repository URLs.
 
-A GitHub URL is useful but not enough on its own. If ChatGPT Pro has GitHub connector, Deep Research, or browsing available, it may inspect the URL and cite exact file paths or commits. If it cannot access the URL, it must rely on the pasted CCG input, Gemini Gate Evidence, diffs, and file excerpts. Pasted context has priority because uncommitted local changes may not exist on GitHub.
+A GitHub URL is useful but not enough on its own. If ChatGPT Pro has GitHub connector, Deep Research, or browsing available, it may inspect the URL and cite exact file paths or commits. If it cannot access the URL, it must rely on the pasted CCG input, Gemini evidence when provided, diffs, and file excerpts. Pasted context has priority because uncommitted local changes may not exist on GitHub.
 
 ## Hard Boundaries
 
@@ -143,7 +155,7 @@ Round 2 is only after Codex fixes blocker findings.
 
 ### `/ccg:gptpro-exc`
 
-Use this for a Codex + Gemini + GPT Pro read-only implementation companion workflow.
+Use this for a Codex + Gemini + GPT Pro read-only implementation companion workflow. Gemini is optional frontend prototype evidence here: backend-only requests can go straight to the manual GPT Pro bridge, while frontend/full-stack requests should run Gemini frontend helper first when useful.
 
 Expected output from GPT Pro:
 

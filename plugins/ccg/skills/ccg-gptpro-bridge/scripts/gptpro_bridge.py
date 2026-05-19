@@ -36,6 +36,8 @@ BOUNDARIES = (
     "Do not read ChatGPT web DOM",
     "Do not extract ChatGPT Output programmatically",
 )
+GEMINI_POLICIES = ("required", "optional", "none")
+GEMINI_EVIDENCE_ROLES = ("gate", "frontend-prototype", "frontend-review")
 CONTROL_CHAR_PATTERN = re.compile(r"[\x00-\x1f\x7f]")
 WINDOWS_DRIVE_PATTERN = re.compile(r"^[A-Za-z]:[\\/]")
 SCP_LIKE_REMOTE_PATTERN = re.compile(r"^(?:([^@/:\\]+)@)?([A-Za-z0-9.-]+):(.+)$")
@@ -64,7 +66,9 @@ def display_path(path: Path, workdir: Path) -> str:
 
 
 def display_gate_response_file(gemini_gate: dict[str, Any], workdir: Path) -> str:
-    response_value = str(gemini_gate["response_file"])
+    response_value = str(gemini_gate.get("response_file") or "")
+    if not response_value:
+        return ""
     response_path = Path(response_value)
     if not response_path.is_absolute():
         return response_value
@@ -204,17 +208,86 @@ def read_template(name: str) -> str:
     return file_path.read_text(encoding="utf-8").strip()
 
 
+def default_gemini_policy(mode: str) -> str:
+    return "optional" if mode == "exc" else "required"
+
+
+def default_gemini_evidence_role(mode: str) -> str:
+    return "frontend-prototype" if mode == "exc" else "gate"
+
+
+def normalize_gemini_policy(policy: str) -> str:
+    normalized = (policy or "").strip() or "required"
+    if normalized not in GEMINI_POLICIES:
+        raise ValueError(f"Invalid Gemini evidence policy: {normalized}")
+    return normalized
+
+
+def normalize_gemini_evidence_role(role: str) -> str:
+    normalized = (role or "").strip() or "gate"
+    if normalized not in GEMINI_EVIDENCE_ROLES:
+        raise ValueError(f"Invalid Gemini evidence role: {normalized}")
+    return normalized
+
+
+def empty_gemini_evidence(policy: str, role: str) -> dict[str, Any]:
+    return {
+        "required": policy == "required",
+        "policy": policy,
+        "role": role,
+        "available": False,
+        "response_file": "",
+        "response_non_empty": False,
+        "response_chars": 0,
+        "response_sha256": "",
+        "summary": "",
+    }
+
+
+def normalize_gemini_evidence(gemini_evidence: dict[str, Any], policy: str, role: str) -> dict[str, Any]:
+    normalized = dict(gemini_evidence)
+    normalized.setdefault("policy", policy)
+    normalized.setdefault("role", role)
+    normalized.setdefault("available", bool(normalized.get("response_non_empty")))
+    normalized.setdefault("required", str(normalized.get("policy")) == "required")
+    normalized.setdefault("response_file", "")
+    normalized.setdefault("response_non_empty", bool(normalized.get("available")))
+    normalized.setdefault("response_chars", 0)
+    normalized.setdefault("response_sha256", "")
+    normalized.setdefault("summary", "")
+    return normalized
+
+
+def gemini_evidence_title(role: str) -> str:
+    if role == "frontend-prototype":
+        return "## Gemini Frontend Prototype Evidence"
+    if role == "frontend-review":
+        return "## Gemini Frontend Review Evidence"
+    return "## Gemini Gate Evidence"
+
+
+def gemini_summary_label(role: str) -> str:
+    if role == "frontend-prototype":
+        return "Gemini frontend prototype summary:"
+    if role == "frontend-review":
+        return "Gemini frontend review summary:"
+    return "Gemini findings summary:"
+
+
 def compose_gemini_evidence(gemini_gate: dict[str, Any]) -> str:
+    if not gemini_gate.get("available", True):
+        return ""
+    role = str(gemini_gate.get("role") or "gate")
     return "\n".join(
         [
-            "## Gemini Gate Evidence",
+            gemini_evidence_title(role),
             "",
-            f"Gemini response file: {gemini_gate['response_file']}",
-            f"Gemini response SHA-256: {gemini_gate['response_sha256']}",
-            f"Gemini response characters: {gemini_gate['response_chars']}",
+            f"Gemini response file: {gemini_gate.get('response_file') or ''}",
+            f"Gemini response SHA-256: {gemini_gate.get('response_sha256') or ''}",
+            f"Gemini response characters: {gemini_gate.get('response_chars') or 0}",
             "",
-            "Gemini findings summary:",
-            gemini_gate["summary"],
+            gemini_summary_label(role),
+            str(gemini_gate.get("summary") or ""),
         ]
     )
 
@@ -241,7 +314,7 @@ def compose_project_context(project_context: dict[str, Any]) -> str:
             ),
             (
                 "If you cannot access the repository URL, do not guess. Rely on the pasted CCG input, "
-                "Gemini Gate Evidence, and any included diffs or file excerpts."
+                "Gemini evidence when provided, and any included diffs or file excerpts."
             ),
             (
                 "The repository URL may not include uncommitted local changes; pasted context has "
@@ -266,7 +339,9 @@ def compose_prompt(
             sections.append(f"## Follow-up Reason\n\n{followup_reason.strip()}")
     sections.append(read_template(mode))
     sections.append(compose_project_context(project_context))
-    sections.append(compose_gemini_evidence(gemini_gate))
+    gemini_section = compose_gemini_evidence(gemini_gate)
+    if gemini_section:
+        sections.append(gemini_section)
     sections.append("## CCG Input\n\n" + raw_prompt.strip())
     return "\n\n".join(section for section in sections if section).strip() + "\n"
 
@@ -289,7 +364,32 @@ def read_gemini_gate(
     summary: str = "",
     summary_file: str = "",
 ) -> dict[str, Any]:
+    return read_gemini_evidence(
+        workdir,
+        response_file,
+        summary,
+        summary_file,
+        policy="required",
+        role="gate",
+    )
+
+
+def read_gemini_evidence(
+    workdir: str | Path,
+    response_file: str,
+    summary: str = "",
+    summary_file: str = "",
+    *,
+    policy: str = "required",
+    role: str = "gate",
+) -> dict[str, Any]:
+    policy = normalize_gemini_policy(policy)
+    role = normalize_gemini_evidence_role(role)
     if not response_file:
+        if summary or summary_file:
+            raise ValueError("Gemini response file is required when Gemini summary evidence is provided.")
+        if policy != "required":
+            return empty_gemini_evidence(policy, role)
         raise ValueError("CCG_GEMINI_RESPONSE_FILE is required before GPT Pro bridge session creation.")
 
     workdir_path = Path(workdir).resolve()
@@ -318,7 +418,10 @@ def read_gemini_gate(
 
     gemini_bytes = gemini_path.read_bytes()
     return {
-        "required": True,
+        "required": policy == "required",
+        "policy": policy,
+        "role": role,
+        "available": True,
         "response_file": str(gemini_path),
         "response_non_empty": True,
         "response_chars": len(gemini_text),
@@ -396,6 +499,9 @@ def create_session(
     followup_session: str | Path | None,
     followup_reason: str | None,
     gemini_gate: dict[str, Any] | None = None,
+    gemini_evidence: dict[str, Any] | None = None,
+    gemini_policy: str = "",
+    gemini_evidence_role: str = "",
     project_context: dict[str, Any] | None = None,
 ) -> BridgeSession:
     if round_number > MANUAL_QUESTIONS_MAX:
@@ -408,6 +514,10 @@ def create_session(
     workdir_path = Path(workdir).resolve()
     output_root_path = resolve_output_root(workdir_path, Path(output_root)).resolve()
     output_root_path.mkdir(parents=True, exist_ok=True)
+    policy = normalize_gemini_policy(gemini_policy or default_gemini_policy(mode))
+    role = normalize_gemini_evidence_role(gemini_evidence_role or default_gemini_evidence_role(mode))
+    if gemini_evidence is None and gemini_gate is not None:
+        gemini_evidence = gemini_gate
 
     if followup_session:
         session_dir = Path(followup_session).resolve()
@@ -420,12 +530,14 @@ def create_session(
         status = json.loads(status_file.read_text(encoding="utf-8"))
         slug_value = str(status.get("slug") or slugify(session_dir.name))
         created_at = str(status.get("created_at") or utc_now())
-        if gemini_gate is None:
-            inherited_gate = status.get("gemini_gate")
-            if not inherited_gate:
-                raise ValueError("Gemini Gate Before GPT Pro is required for follow-up sessions.")
-            gemini_gate = dict(inherited_gate)
-            gemini_gate["inherited_from_round"] = 1
+        if gemini_evidence is None:
+            inherited_evidence = status.get("gemini_evidence") or status.get("gemini_gate")
+            if not inherited_evidence:
+                if policy == "required":
+                    raise ValueError("Gemini Gate Before GPT Pro is required for follow-up sessions.")
+                inherited_evidence = empty_gemini_evidence(policy, role)
+            gemini_evidence = dict(inherited_evidence)
+            gemini_evidence["inherited_from_round"] = 1
     else:
         slug_value = slugify(slug or prompt[:60])
         session_dir = ensure_unique_session_dir(output_root_path, mode, slug_value).resolve()
@@ -433,7 +545,13 @@ def create_session(
         status = {}
         created_at = utc_now()
 
-    if gemini_gate is None:
+    if gemini_evidence is None:
+        if policy != "required":
+            gemini_evidence = empty_gemini_evidence(policy, role)
+        else:
+            raise ValueError("CCG_GEMINI_RESPONSE_FILE is required before GPT Pro bridge session creation.")
+    gemini_evidence = normalize_gemini_evidence(gemini_evidence, policy, role)
+    if policy == "required" and not gemini_evidence.get("available"):
         raise ValueError("CCG_GEMINI_RESPONSE_FILE is required before GPT Pro bridge session creation.")
     if project_context is None:
         project_context = detect_project_context(workdir_path)
@@ -443,7 +561,7 @@ def create_session(
     round_dir.mkdir(parents=True, exist_ok=True)
     prompt_file = round_dir / "prompt.md"
     response_file = round_dir / "response.md"
-    prompt_gate = dict(gemini_gate)
+    prompt_gate = dict(gemini_evidence)
     prompt_gate["response_file"] = display_gate_response_file(prompt_gate, workdir_path)
     prompt_file.write_text(
         compose_prompt(mode, prompt, round_number, followup_reason, prompt_gate, project_context),
@@ -481,11 +599,16 @@ def create_session(
         "auto_output_read": False,
         "prompt_copied": bool(status.get("prompt_copied", False)),
         "project_context": project_context,
-        "gemini_gate": {
-            **gemini_gate,
-            "response_file": display_gate_response_file(gemini_gate, workdir_path),
+        "gemini_evidence": {
+            **gemini_evidence,
+            "response_file": display_gate_response_file(gemini_evidence, workdir_path),
         },
     }
+    if gemini_evidence.get("role") == "gate" and gemini_evidence.get("available"):
+        new_status["gemini_gate"] = {
+            **gemini_evidence,
+            "response_file": display_gate_response_file(gemini_evidence, workdir_path),
+        }
     status_file.write_text(json.dumps(new_status, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
     return BridgeSession(mode, workdir_path, session_dir, round_name, prompt_file, response_file, status_file)
 
@@ -731,6 +854,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--gemini-response-file", default="")
     parser.add_argument("--gemini-summary", default="")
     parser.add_argument("--gemini-summary-file", default="")
+    parser.add_argument("--gemini-policy", choices=GEMINI_POLICIES, default="")
+    parser.add_argument("--gemini-evidence-role", choices=GEMINI_EVIDENCE_ROLES, default="")
     parser.add_argument("--repo-url", default="")
     parser.add_argument("--wait-response", action="store_true")
     parser.add_argument("--hold-seconds", type=int, default=0)
@@ -856,13 +981,18 @@ def main(argv: list[str] | None = None) -> int:
         return 2
     try:
         raw_prompt = read_prompt(args.prompt, args.prompt_file)
-        gemini_gate = None
-        if args.gemini_response_file or args.gemini_summary or args.gemini_summary_file or not args.followup_session:
-            gemini_gate = read_gemini_gate(
+        gemini_policy = args.gemini_policy or default_gemini_policy(args.mode)
+        gemini_evidence_role = args.gemini_evidence_role or default_gemini_evidence_role(args.mode)
+        gemini_evidence = None
+        has_gemini_args = bool(args.gemini_response_file or args.gemini_summary or args.gemini_summary_file)
+        if has_gemini_args or not args.followup_session:
+            gemini_evidence = read_gemini_evidence(
                 args.workdir,
                 args.gemini_response_file,
                 args.gemini_summary,
                 args.gemini_summary_file,
+                policy=gemini_policy,
+                role=gemini_evidence_role,
             )
         project_context = detect_project_context(args.workdir, args.repo_url)
         session = create_session(
@@ -874,7 +1004,9 @@ def main(argv: list[str] | None = None) -> int:
             round_number=args.round,
             followup_session=args.followup_session or None,
             followup_reason=args.followup_reason or None,
-            gemini_gate=gemini_gate,
+            gemini_evidence=gemini_evidence,
+            gemini_policy=gemini_policy,
+            gemini_evidence_role=gemini_evidence_role,
             project_context=project_context,
         )
     except Exception as error:

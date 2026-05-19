@@ -12,8 +12,24 @@ Use this role for frontend, UI, UX, accessibility, responsive layout, component 
 
 ## Output
 
+For implementation/prototype requests, return a Unified Diff Patch ONLY.
+
+Do not return a component sketch as the implementation output. The patch is a dirty prototype: Codex owns the real workspace, will rewrite it to match local patterns, and will run verification before delivery.
+
+```diff
+--- a/path/to/file
++++ b/path/to/file
+@@
++example change
+```
+
+For review-only requests, return:
+
 1. UI/UX analysis.
-2. Implementation recommendation.
-3. Accessibility and responsive risks.
-4. Unified Diff Patch or component sketch if requested.
-5. Verification checklist.
+2. Blocking issues.
+3. Major issues.
+4. Minor issues.
+5. Concrete fixes.
+6. Verification checklist.
+
+If a review finding needs code, include a fenced Unified Diff Patch.

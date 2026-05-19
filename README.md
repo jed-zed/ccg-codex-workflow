@@ -8,8 +8,8 @@ This project rewrites CCG execution around Codex:
 
 - Codex creates or revises CCG plans.
 - Codex is the orchestrator and final executor.
-- Gemini is a bounded helper for drafts, edge cases, tests, UI prototypes, and review.
-- Codex applies final code changes, runs verification, reviews diffs, and reports in Chinese.
+- Gemini is mandatory for frontend/UI Unified Diff prototypes and frontend/UI post-change review, while remaining optional for simple backend-only work.
+- Codex treats Gemini diffs as dirty prototypes, applies final code changes, runs verification, reviews diffs, and reports in Chinese.
 
 ## Install Locally
 
@@ -270,7 +270,8 @@ Implement a feature directly through the high-frequency command surface:
 Execution has two practical Gemini policies:
 
 - **Fast**: simple, backend-heavy changes may be Codex-only unless the plan or risk level calls for Gemini.
-- **Strict**: high-risk, UI-heavy, broad refactors, or release-sensitive work should use Gemini through the preview helper for a bounded second-pass review.
+- **Frontend strict**: frontend/UI implementation must use Gemini through the preview helper with `--prompt-template frontend` or `--prompt-template prototype`, request `OUTPUT: Unified Diff Patch ONLY`, then let Codex rewrite and apply the dirty prototype.
+- **Review strict**: any frontend/UI diff must get a bounded Gemini review through `--prompt-template review` or `--prompt-template frontend`; failed Gemini review is retried twice and then reported instead of being silently skipped.
 
 Use the typo-compatible alias:
 
@@ -296,11 +297,13 @@ This plugin supports Codex + Gemini + GPT Pro planning, review, and execution-co
 - `/ccg:gptpro-review`
 - `/ccg:gptpro-exc`
 
-For these commands, Codex first runs Gemini read-only analysis through the bundled Gemini preview helper. Codex then includes the Gemini response file path and a concise Gemini findings summary in the GPT Pro manual prompt. After the user saves the GPT Pro response, Codex must synthesize Codex, Gemini, and GPT Pro findings and remain the final owner.
+For `/ccg:gptpro-plan` and `/ccg:gptpro-review`, Codex first runs Gemini read-only analysis through the bundled Gemini preview helper. Codex then includes the Gemini response file path and a concise Gemini findings summary in the GPT Pro manual prompt. After the user saves the GPT Pro response, Codex must synthesize Codex, Gemini, and GPT Pro findings and remain the final owner.
 
-Gemini Gate Before GPT Pro: Codex must read a real `CCG_GEMINI_RESPONSE_FILE` containing a non-empty Gemini response before creating any GPT Pro manual prompt. If Gemini fails, produces no response file, or writes an empty response, Codex stops in Chinese, does not create a GPT Pro bridge session, and must not invent Gemini findings.
+Gemini Gate Before GPT Pro still applies to `/ccg:gptpro-plan` and `/ccg:gptpro-review`: Codex must read a real `CCG_GEMINI_RESPONSE_FILE` containing a non-empty Gemini response before creating those GPT Pro manual prompts. If required Gemini evidence fails, produces no response file, or writes an empty response, Codex stops in Chinese, does not create a GPT Pro bridge session, and must not invent Gemini findings.
 
-The helper enforces this gate with `--gemini-response-file <CCG_GEMINI_RESPONSE_FILE>` and `--gemini-summary-file <summary-file>` (or `--gemini-summary` for short diagnostics). It injects Gemini Gate Evidence into `prompt.md` and records `response_file`, `response_non_empty`, `response_chars`, `response_sha256`, and `summary` in `status.json`.
+`/ccg:gptpro-exc` uses Gemini Evidence Modes instead of a required gate. Backend-only execution companion requests may create the manual bridge with `--gemini-policy optional --gemini-evidence-role frontend-prototype` and no Gemini response file. Frontend/full-stack requests should first run Gemini with `--prompt-template frontend`, then pass `--gemini-response-file <CCG_GEMINI_RESPONSE_FILE>` and `--gemini-summary-file <summary-file>` so the prompt includes Gemini Frontend Prototype Evidence.
+
+The helper records Gemini provenance under `gemini_evidence` in `status.json`: `policy`, `role`, `available`, `response_file`, `response_non_empty`, `response_chars`, `response_sha256`, and `summary`. For required gate sessions it also injects Gemini Gate Evidence into `prompt.md`.
 
 The helper also adds Project Access Context to each GPT Pro prompt: project name, sanitized repository URL, branch, commit, and local clean/dirty status. ChatGPT Pro may use the repository URL through GitHub connector, Deep Research, or browsing when available, but it must cite exact file paths or commits and must not guess if the URL is inaccessible. Pasted task context, Gemini evidence, diffs, and file excerpts remain the source of truth because local changes may not exist on GitHub.
 
@@ -385,7 +388,7 @@ python .\plugins\ccg\skills\ccg-executor\scripts\invoke_gemini_preview.py --work
 
 The default Gemini model is `gemini-3.1-pro-preview`. You can override it with `GEMINI_MODEL` or `--model`.
 
-Gemini helper prompts use bundled CCG templates by default. Use `--prompt-template general|plan|prototype|review|frontend|analyzer|architect|debugger|optimizer|tester`; use `none` only for debugging the wrapper. These templates are adapted from the original CCG role prompts, but rewritten so Codex owns orchestration, file edits, verification, and final delivery while Gemini remains a read-only helper. The browser preview shows a live process timeline, parsed Gemini output, and a raw stream-json/debug pane. Preview tabs attempt to close themselves after completion, defaulting to 3 seconds; pass `--no-auto-close-browser` to keep the preview open. The response file remains the source of truth if browser focus, polling, or auto-close behavior hides the final output.
+Gemini helper prompts use bundled CCG templates by default. Use `--prompt-template general|plan|prototype|review|frontend|analyzer|architect|debugger|optimizer|tester`; use `none` only for debugging the wrapper. These templates are adapted from the original CCG role prompts, but rewritten so Codex owns orchestration, file edits, verification, and final delivery while Gemini remains a read-only helper. Frontend/UI implementation prompts must use `frontend` or `prototype` and require a Unified Diff Patch ONLY; Codex treats that patch as a dirty prototype and rewrites it before applying final code. The browser preview shows a live process timeline, parsed Gemini output, and a raw stream-json/debug pane. Preview tabs attempt to close themselves after completion, defaulting to 3 seconds; pass `--no-auto-close-browser` to keep the preview open. The response file remains the source of truth if browser focus, polling, or auto-close behavior hides the final output.
 
 Use `--direct-workdir` only when you explicitly want Gemini to run against the real workspace.
 

@@ -4,7 +4,7 @@ Use this role when Codex wants an implementation draft.
 
 ## Output
 
-Return a prototype as a Unified Diff Patch when possible.
+Return a Unified Diff Patch ONLY.
 
 ```diff
 --- a/path/to/file
@@ -20,4 +20,4 @@ Also include:
 3. Tests that should be run.
 4. Known risks or parts Codex should rewrite before applying.
 
-Treat the patch as a draft. Codex will refactor it into production-quality code before applying.
+Treat the patch as a dirty prototype. Codex will refactor it into production-quality code before applying, and Codex is the only actor allowed to edit the real workspace.
