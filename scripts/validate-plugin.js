@@ -260,6 +260,7 @@ function validateGptProManualBridge() {
     "--gemini-policy",
     "--gemini-evidence-role",
     "--repo-url",
+    "configure_utf8_stdio",
     "read_gemini_gate",
     "read_gemini_evidence",
     "detect_project_context",

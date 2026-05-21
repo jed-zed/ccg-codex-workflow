@@ -1253,6 +1253,37 @@ test("fixture:gptpro-bridge prints full manual prompt when requested", () => {
   assert(end > prompt, `expected prompt end marker after prompt text:\n${result.stdout}`);
 });
 
+test("fixture:gptpro-bridge prints unicode prompt under cp1252 stdout", () => {
+  const dir = tempDir("ccg-gptpro-print-prompt-cp1252-");
+  const outputRoot = path.join(dir, ".codex", "ccg", "gptpro");
+  const promptText = "Plan a handoff barrier. Include exact prompt display.";
+  const gemini = createGeminiGateFixture(dir);
+  const result = run(python, [
+    gptproBridge,
+    "--mode",
+    "plan",
+    "--workdir",
+    dir,
+    "--prompt",
+    promptText,
+    "--slug",
+    "handoff-barrier-cp1252",
+    "--output-root",
+    outputRoot,
+    ...gemini.args,
+    "--hold-seconds",
+    "0",
+    "--print-prompt",
+  ], {
+    env: {
+      PYTHONIOENCODING: "cp1252",
+    },
+  });
+
+  assert(result.stdout.includes("需求完整性评分（0-10）"), `expected unicode scorecard prompt:\n${result.stdout}`);
+  assert(result.stdout.includes("CCG_GPTPRO_PROMPT_END"), `expected prompt end marker:\n${result.stdout}`);
+});
+
 test("fixture:gptpro-bridge detached preview remains usable after command exits", () => {
   const dir = tempDir("ccg-gptpro-detached-preview-");
   const outputRoot = path.join(dir, ".codex", "ccg", "gptpro");
