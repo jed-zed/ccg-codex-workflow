@@ -389,6 +389,183 @@ function validateGptProManualBridge() {
   console.log("GPT Pro manual bridge ok");
 }
 
+function validateScorecardParity() {
+  function requirePhrases(label, relativePath, phrases) {
+    const text = fs.readFileSync(path.join(repoRoot, relativePath), "utf8");
+    for (const phrase of phrases) {
+      if (!text.includes(phrase)) fail(`${label} is missing scorecard phrase: ${phrase}`);
+    }
+  }
+
+  const requirementPhrases = [
+    "需求完整性评分（0-10）",
+    "目标明确性（0-3）",
+    "预期结果（0-3）",
+    "边界范围（0-2）",
+    "约束条件（0-2）",
+    "总分：X/10",
+    "判定：>=7 继续；<7 停止并提出补充问题",
+  ];
+  for (const [label, file] of [
+    ["ccg-plan", "plugins/ccg/skills/ccg-plan/SKILL.md"],
+    ["plan command", "plugins/ccg/commands/plan.md"],
+    ["ccg-gptpro-plan", "plugins/ccg/skills/ccg-gptpro-plan/SKILL.md"],
+    ["GPT Pro plan template", "plugins/ccg/skills/ccg-gptpro-bridge/templates/gptpro/plan.md"],
+  ]) {
+    requirePhrases(label, file, requirementPhrases);
+  }
+  requirePhrases("ccg-gptpro-plan", "plugins/ccg/skills/ccg-gptpro-plan/SKILL.md", [
+    "Planning Readiness Scorecard",
+  ]);
+  requirePhrases("GPT Pro plan template", "plugins/ccg/skills/ccg-gptpro-bridge/templates/gptpro/plan.md", [
+    "Requirement Completeness",
+    "Planning Readiness Scorecard",
+    "Ready / Needs Follow-up / Blocked",
+  ]);
+
+  requirePhrases("ccg-executor", "plugins/ccg/skills/ccg-executor/SKILL.md", [
+    "完成度评分",
+    "Plan Coverage",
+    "Implementation Coverage",
+    "Verification",
+    "Review Findings",
+    "Residual Risk",
+    "TOTAL SCORE",
+    "Ready / Needs Follow-up / Blocked",
+    "`Verification` must be at most `10/20`",
+    "Critical blocker",
+    "`Blocked`",
+  ]);
+  for (const [label, file] of [
+    ["execute command", "plugins/ccg/commands/execute.md"],
+    ["codex-exec command", "plugins/ccg/commands/codex-exec.md"],
+    ["excute command", "plugins/ccg/commands/excute.md"],
+  ]) {
+    requirePhrases(label, file, [
+      "完成度评分",
+      "Plan Coverage",
+      "Implementation Coverage",
+      "Verification",
+      "Review Findings",
+      "Residual Risk",
+      "TOTAL SCORE",
+    ]);
+  }
+
+  const validationReportPhrases = [
+    "VALIDATION REPORT",
+    "Task / Root Cause Coverage: XX/20",
+    "Code Quality: XX/20",
+    "Side Effects: XX/20",
+    "Edge Cases: XX/20",
+    "Test Coverage: XX/20",
+    "TOTAL SCORE: XX/100",
+  ];
+  for (const [label, file] of [
+    ["review command", "plugins/ccg/commands/review.md"],
+    ["ccg-review", "plugins/ccg/skills/ccg-review/SKILL.md"],
+    ["Gemini review template", "plugins/ccg/skills/ccg-executor/templates/gemini/review.md"],
+    ["ccg-gptpro-review", "plugins/ccg/skills/ccg-gptpro-review/SKILL.md"],
+    ["GPT Pro review template", "plugins/ccg/skills/ccg-gptpro-bridge/templates/gptpro/review.md"],
+  ]) {
+    requirePhrases(label, file, validationReportPhrases);
+  }
+
+  const frontendReportPhrases = [
+    "FRONTEND VALIDATION REPORT",
+    "User Experience: XX/20",
+    "Visual Consistency: XX/20",
+    "Accessibility: XX/20",
+    "Performance: XX/20",
+    "Browser Compatibility: XX/20",
+    "TOTAL SCORE: XX/100",
+  ];
+  for (const [label, file] of [
+    ["review command", "plugins/ccg/commands/review.md"],
+    ["ccg-review", "plugins/ccg/skills/ccg-review/SKILL.md"],
+    ["Gemini frontend template", "plugins/ccg/skills/ccg-executor/templates/gemini/frontend.md"],
+    ["ccg-gptpro-review", "plugins/ccg/skills/ccg-gptpro-review/SKILL.md"],
+    ["GPT Pro review template", "plugins/ccg/skills/ccg-gptpro-bridge/templates/gptpro/review.md"],
+  ]) {
+    requirePhrases(label, file, frontendReportPhrases);
+  }
+
+  for (const [label, file] of [
+    ["gptpro-exc command", "plugins/ccg/commands/gptpro-exc.md"],
+    ["ccg-gptpro-exc", "plugins/ccg/skills/ccg-gptpro-exc/SKILL.md"],
+    ["GPT Pro exc template", "plugins/ccg/skills/ccg-gptpro-bridge/templates/gptpro/exc.md"],
+  ]) {
+    requirePhrases(label, file, [
+      "Implementation Readiness Scorecard",
+      "manual second opinion",
+      "does not decide the final implementation",
+    ]);
+  }
+
+  requirePhrases("GPT Pro bridge", "plugins/ccg/skills/ccg-gptpro-bridge/SKILL.md", [
+    "Scorecard Output Contracts",
+    "Requirement Completeness",
+    "Planning Readiness Scorecard",
+    "VALIDATION REPORT",
+    "FRONTEND VALIDATION REPORT",
+    "Implementation Readiness Scorecard",
+    "more conservative score",
+  ]);
+  requirePhrases("gptpro-plan command", "plugins/ccg/commands/gptpro-plan.md", [
+    "Requirement Completeness",
+    "需求完整性评分（0-10）",
+    "Planning Readiness Scorecard",
+  ]);
+  requirePhrases("gptpro-review command", "plugins/ccg/commands/gptpro-review.md", [
+    "VALIDATION REPORT",
+    "TOTAL SCORE: XX/100",
+    "FRONTEND VALIDATION REPORT",
+    "more conservative score",
+  ]);
+
+  for (const [label, file] of [
+    ["ccg-spec-review", "plugins/ccg/skills/ccg-spec-review/SKILL.md"],
+    ["ccg-team-review", "plugins/ccg/skills/ccg-team-review/SKILL.md"],
+  ]) {
+    requirePhrases(label, file, [
+      "Summary Scorecard",
+      "Completeness",
+      "Correctness",
+      "Coherence",
+      "CRITICAL",
+      "WARNING",
+      "SUGGESTION",
+      "Final Assessment",
+    ]);
+  }
+
+  for (const [label, file] of [
+    ["README", "README.md"],
+    ["parity matrix", "docs/original-ccg-parity-matrix.md"],
+  ]) {
+    requirePhrases(label, file, [
+      "Scorecard",
+      "Planning Readiness Scorecard",
+      "VALIDATION REPORT",
+      "Implementation Readiness Scorecard",
+      "Summary Scorecard",
+    ]);
+  }
+  requirePhrases("GPT Pro bridge docs", "docs/gptpro-manual-bridge.md", [
+    "Scorecard",
+    "Planning Readiness Scorecard",
+    "VALIDATION REPORT",
+    "Implementation Readiness Scorecard",
+  ]);
+
+  requirePhrases("fixture coverage", "scripts/run-fixture-tests.js", [
+    "fixture:scorecard-parity",
+    "fixture:gptpro-scorecard-contracts",
+  ]);
+
+  console.log("scorecard parity ok");
+}
+
 function validateOriginalCcgParityPhaseOne() {
   const matrixPath = path.join(repoRoot, "docs/original-ccg-parity-matrix.md");
   if (!fs.existsSync(matrixPath)) fail("missing original CCG parity matrix");
@@ -823,6 +1000,7 @@ function main() {
   validateGptProManualBridge();
   validateOriginalCcgParityPhaseOne();
   validatePlanLanguageContract();
+  validateScorecardParity();
   validateReleaseDocs();
   validateDoctorFixDocs();
   validateCiActions();

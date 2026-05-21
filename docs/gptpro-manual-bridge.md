@@ -57,6 +57,18 @@ For `/ccg:gptpro-exc`, use:
 
 If a frontend/full-stack task has Gemini output, also pass `--gemini-response-file <CCG_GEMINI_RESPONSE_FILE> --gemini-summary-file <summary-file>`. The helper injects Gemini Frontend Prototype Evidence. If no Gemini response file is provided, the helper creates the bridge session and records `gemini_evidence.available=false`.
 
+## Scorecard Output Contracts
+
+Each GPT Pro mode has a fixed scoring contract:
+
+| Mode | Required score output |
+| --- | --- |
+| `plan` | `Requirement Completeness` with `需求完整性评分（0-10）` and `Planning Readiness Scorecard`. |
+| `review` | `VALIDATION REPORT` with `TOTAL SCORE: XX/100`; frontend/UI reviews also require `FRONTEND VALIDATION REPORT`. |
+| `exc` | `Implementation Readiness Scorecard` for plan fit, implementation completeness, verification readiness, risk, and adoption recommendation. |
+
+GPT Pro scores are manual second-opinion evidence only. Codex must verify the evidence, use the more conservative score when Codex/Gemini/GPT Pro disagree, and keep final ownership of implementation and delivery.
+
 ## Project Access Context
 
 The prompt also includes a Project Access Context section so ChatGPT Pro can understand where the work lives.
@@ -130,6 +142,8 @@ Plan-only Boundary:
 
 Expected output from GPT Pro:
 
+- `Requirement Completeness`
+- `Planning Readiness Scorecard`
 - planning risks
 - alternative approaches
 - missing context
@@ -145,6 +159,8 @@ Use this for a Codex + Gemini + GPT Pro review workflow over a plan, diff, chang
 
 Expected output from GPT Pro:
 
+- `VALIDATION REPORT`
+- `FRONTEND VALIDATION REPORT` when the target is frontend/UI-heavy
 - blocking findings
 - non-blocking findings
 - test gaps
@@ -159,6 +175,7 @@ Use this for a Codex-led read-only implementation companion workflow: Codex cont
 
 Expected output from GPT Pro:
 
+- `Implementation Readiness Scorecard`
 - implementation sketch
 - pseudo patch or unified diff if enough context exists
 - tests to add

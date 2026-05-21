@@ -18,3 +18,18 @@ Review team results before delivery.
 - Security-sensitive changes are reviewed.
 
 Gemini may provide a second-pass review through the preview helper; Codex delivers final judgment in Chinese.
+
+## Output Contract
+
+Every review must include:
+
+```markdown
+### Summary Scorecard
+| Dimension | Status |
+| --- | --- |
+| Completeness | X/Y tasks |
+| Correctness | M/N acceptance criteria covered |
+| Coherence | Followed / Issues |
+```
+
+Then group findings as `CRITICAL`, `WARNING`, and `SUGGESTION`, and finish with `Final Assessment`. Critical findings must block delivery until resolved.

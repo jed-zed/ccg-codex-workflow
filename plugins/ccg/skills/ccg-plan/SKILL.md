@@ -53,7 +53,15 @@ This gate does not apply to empty-input usage/help responses.
 
 2. **Enhance the requirement**
    - Convert the user request into structured planning input: goal, in-scope behavior, out-of-scope behavior, constraints, acceptance criteria, likely affected areas, and open questions.
+   - Score the enhanced requirement with the original CCG-style `需求完整性评分（0-10）` before writing a plan:
+     - `目标明确性（0-3）`
+     - `预期结果（0-3）`
+     - `边界范围（0-2）`
+     - `约束条件（0-2）`
+     - `总分：X/10`
+     - `判定：>=7 继续；<7 停止并提出补充问题`
    - If high-impact ambiguity remains, ask the user before writing any plan.
+   - If the requirement score is `<7`, stop and ask concise follow-up questions instead of creating or revising a plan.
 
 3. **Search project context**
    - Prefer `mcp__ace-tool__search_context` when available.
@@ -115,6 +123,14 @@ Use this Chinese Markdown structure:
 
 ### 验收标准
 - [ ] <可观察的验收条件>
+
+### 需求完整性评分（0-10）
+- 目标明确性（0-3）：X/3 - <理由>
+- 预期结果（0-3）：X/3 - <理由>
+- 边界范围（0-2）：X/2 - <理由>
+- 约束条件（0-2）：X/2 - <理由>
+- 总分：X/10
+- 判定：>=7 继续；<7 停止并提出补充问题
 
 ## 2. 上下文证据
 

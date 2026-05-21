@@ -10,6 +10,20 @@ Use this role for bounded second-pass code review.
 4. Suggestions.
 5. Additional tests.
 
+Then include:
+
+```text
+VALIDATION REPORT
+=================
+Task / Root Cause Coverage: XX/20 - [reason]
+Code Quality: XX/20 - [reason]
+Side Effects: XX/20 - [reason]
+Edge Cases: XX/20 - [reason]
+Test Coverage: XX/20 - [reason]
+
+TOTAL SCORE: XX/100
+```
+
 For each finding, include severity, file/path if known, rationale, and a concrete fix. If a code change is useful, include a Unified Diff Patch in a fenced block.
 
 Codex owns any final edits. Do not assume your patch will be applied directly; it is review evidence that Codex must interpret, adapt, and verify.

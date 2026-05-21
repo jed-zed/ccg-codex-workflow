@@ -1517,6 +1517,156 @@ test("fixture:gptpro-bridge rejects round-2 without followup session", () => {
   assert(!fs.existsSync(outputRoot), "did not expect a new session root for invalid round 2");
 });
 
+test("fixture:scorecard-parity original CCG scorecards are required", () => {
+  function read(relativePath) {
+    return fs.readFileSync(path.join(repoRoot, relativePath), "utf8");
+  }
+  function assertIncludes(text, phrase, label) {
+    assert(text.includes(phrase), `${label} missing ${phrase}`);
+  }
+
+  const planSkill = read("plugins/ccg/skills/ccg-plan/SKILL.md");
+  for (const phrase of [
+    "需求完整性评分（0-10）",
+    "目标明确性（0-3）",
+    "预期结果（0-3）",
+    "边界范围（0-2）",
+    "约束条件（0-2）",
+    "判定：>=7 继续；<7 停止并提出补充问题",
+  ]) {
+    assertIncludes(planSkill, phrase, "ccg-plan");
+  }
+
+  const executorSkill = read("plugins/ccg/skills/ccg-executor/SKILL.md");
+  for (const phrase of [
+    "完成度评分",
+    "Plan Coverage",
+    "Implementation Coverage",
+    "Verification",
+    "Review Findings",
+    "Residual Risk",
+    "TOTAL SCORE",
+    "Ready / Needs Follow-up / Blocked",
+    "`Verification` must be at most `10/20`",
+    "Critical blocker",
+  ]) {
+    assertIncludes(executorSkill, phrase, "ccg-executor");
+  }
+
+  const reviewCorpus = [
+    read("plugins/ccg/skills/ccg-review/SKILL.md"),
+    read("plugins/ccg/skills/ccg-executor/templates/gemini/review.md"),
+    read("plugins/ccg/skills/ccg-executor/templates/gemini/frontend.md"),
+  ].join("\n");
+  for (const phrase of [
+    "VALIDATION REPORT",
+    "Task / Root Cause Coverage: XX/20",
+    "TOTAL SCORE: XX/100",
+    "FRONTEND VALIDATION REPORT",
+    "User Experience: XX/20",
+    "Browser Compatibility: XX/20",
+  ]) {
+    assertIncludes(reviewCorpus, phrase, "review scorecards");
+  }
+
+  for (const relativePath of [
+    "plugins/ccg/skills/ccg-spec-review/SKILL.md",
+    "plugins/ccg/skills/ccg-team-review/SKILL.md",
+  ]) {
+    const text = read(relativePath);
+    for (const phrase of [
+      "Summary Scorecard",
+      "Completeness",
+      "Correctness",
+      "Coherence",
+      "CRITICAL",
+      "WARNING",
+      "SUGGESTION",
+      "Final Assessment",
+    ]) {
+      assertIncludes(text, phrase, relativePath);
+    }
+  }
+
+  const docs = [read("README.md"), read("docs/original-ccg-parity-matrix.md")].join("\n");
+  for (const phrase of [
+    "Original-style scorecard parity",
+    "Scorecard Parity",
+    "完成度评分",
+    "Summary Scorecard",
+  ]) {
+    assertIncludes(docs, phrase, "scorecard docs");
+  }
+});
+
+test("fixture:gptpro-scorecard-contracts GPT Pro modes require scorecards", () => {
+  function read(relativePath) {
+    return fs.readFileSync(path.join(repoRoot, relativePath), "utf8");
+  }
+  function assertIncludes(text, phrase, label) {
+    assert(text.includes(phrase), `${label} missing ${phrase}`);
+  }
+
+  const planCorpus = [
+    read("plugins/ccg/skills/ccg-gptpro-plan/SKILL.md"),
+    read("plugins/ccg/skills/ccg-gptpro-bridge/templates/gptpro/plan.md"),
+  ].join("\n");
+  for (const phrase of [
+    "需求完整性评分（0-10）",
+    "Requirement Completeness",
+    "Planning Readiness Scorecard",
+    "判定：>=7 继续；<7 停止并提出补充问题",
+  ]) {
+    assertIncludes(planCorpus, phrase, "gptpro plan scorecard");
+  }
+
+  const reviewCorpus = [
+    read("plugins/ccg/skills/ccg-gptpro-review/SKILL.md"),
+    read("plugins/ccg/skills/ccg-gptpro-bridge/templates/gptpro/review.md"),
+  ].join("\n");
+  for (const phrase of [
+    "VALIDATION REPORT",
+    "FRONTEND VALIDATION REPORT",
+    "TOTAL SCORE: XX/100",
+    "more conservative score",
+  ]) {
+    assertIncludes(reviewCorpus, phrase, "gptpro review scorecard");
+  }
+
+  const excCorpus = [
+    read("plugins/ccg/skills/ccg-gptpro-exc/SKILL.md"),
+    read("plugins/ccg/skills/ccg-gptpro-bridge/templates/gptpro/exc.md"),
+  ].join("\n");
+  for (const phrase of [
+    "Implementation Readiness Scorecard",
+    "manual second opinion",
+    "does not decide the final implementation",
+  ]) {
+    assertIncludes(excCorpus, phrase, "gptpro exc scorecard");
+  }
+
+  const bridgeDocs = [
+    read("plugins/ccg/skills/ccg-gptpro-bridge/SKILL.md"),
+    read("docs/gptpro-manual-bridge.md"),
+  ].join("\n");
+  for (const phrase of [
+    "Scorecard Output Contracts",
+    "Requirement Completeness",
+    "Planning Readiness Scorecard",
+    "VALIDATION REPORT",
+    "Implementation Readiness Scorecard",
+  ]) {
+    assertIncludes(bridgeDocs, phrase, "gptpro bridge scorecard docs");
+  }
+
+  const parityMatrix = read("docs/original-ccg-parity-matrix.md");
+  assertIncludes(parityMatrix, "optional Gemini frontend/full-stack evidence", "gptpro-exc role wording");
+  assert(
+    !parityMatrix.includes("/ccg:gptpro-exc` - Codex + Gemini + GPT Pro execution companion"),
+    "gptpro-exc must not be a fixed tri-model chain"
+  );
+});
+
 test("fixture:gptpro commands, skills, templates, doctor, and bridge coverage exist", () => {
   const ccgCommand = fs.readFileSync(path.join(repoRoot, "plugins", "ccg", "commands", "ccg.md"), "utf8");
   const ccgSkill = fs.readFileSync(path.join(repoRoot, "plugins", "ccg", "skills", "ccg", "SKILL.md"), "utf8");

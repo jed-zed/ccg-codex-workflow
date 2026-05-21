@@ -18,3 +18,18 @@ Review spec-driven work for consistency and scope control.
 - Review output is written or summarized in Chinese and may update `.codex/ccg/specs/<name>/review.md` when requested.
 
 Gemini may provide a bounded second-pass review through the preview helper; Codex makes the final judgment.
+
+## Output Contract
+
+Every review must include:
+
+```markdown
+### Summary Scorecard
+| Dimension | Status |
+| --- | --- |
+| Completeness | X/Y tasks |
+| Correctness | M/N acceptance criteria covered |
+| Coherence | Followed / Issues |
+```
+
+Then group findings as `CRITICAL`, `WARNING`, and `SUGGESTION`, and finish with `Final Assessment`. Critical findings must make the final assessment blocked until fixed.

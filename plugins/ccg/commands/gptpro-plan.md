@@ -18,6 +18,8 @@ Create a Codex + Gemini + GPT Pro planning bridge.
 
 Codex must run Gemini read-only planning analysis through the bundled preview helper before generating the GPT Pro manual prompt. The GPT Pro prompt must include the Gemini response file path and a concise Gemini findings summary.
 
+The GPT Pro prompt must require `Requirement Completeness`, `需求完整性评分（0-10）`, and `Planning Readiness Scorecard`. This remains planning-only and must not trigger execution.
+
 Expected manual ChatGPT Pro questions: 1.
 Maximum manual ChatGPT Pro questions: 2.
 Round 2 is only for blocker re-check or revised plan comparison.

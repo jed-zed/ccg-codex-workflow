@@ -145,6 +145,16 @@ Behavior-depth parity:
 - Rollback supports confirmed non-destructive revert/restore execution.
 - Commit helper can collect CCG gate status before committing.
 
+Original-style scorecard parity:
+
+| Command family | Required score output |
+| --- | --- |
+| `/ccg:plan`, `/ccg:gptpro-plan` | `需求完整性评分（0-10）` with `目标明确性（0-3）`, `预期结果（0-3）`, `边界范围（0-2）`, `约束条件（0-2）`, and `判定：>=7 继续；<7 停止并提出补充问题`; GPT Pro planning also asks for `Planning Readiness Scorecard`. |
+| `/ccg:execute`, `/ccg:codex-exec`, `/ccg:excute` | Final `完成度评分` with five 20-point dimensions, `TOTAL SCORE`, and `Ready / Needs Follow-up / Blocked`. |
+| `/ccg:review`, `/ccg:gptpro-review` | `VALIDATION REPORT` and `TOTAL SCORE: XX/100`; frontend/UI reviews also include `FRONTEND VALIDATION REPORT`. |
+| `/ccg:gptpro-exc` | `Implementation Readiness Scorecard` as a manual second-opinion signal; Codex still decides final implementation and verification. |
+| `/ccg:spec-review`, `/ccg:team-review` | OpenSpec-style `Summary Scorecard`, `CRITICAL / WARNING / SUGGESTION`, and `Final Assessment`. |
+
 The plugin provides these prompt invocations and matching skills:
 
 ```text
@@ -245,6 +255,8 @@ Real `/ccg:plan` runs require Gemini participation. Codex must launch the previe
 
 `/ccg:plan` user-facing output and saved plan content are Chinese by default. English remains acceptable for literal commands, paths, generated slugs, model names, environment variables, code identifiers, and clearly labeled raw Gemini excerpts.
 
+`/ccg:plan` also includes the original `需求完整性评分（0-10）`; if the score is `<7`, Codex stops and asks for missing details instead of creating a plan.
+
 Execute a CCG plan:
 
 ```text
@@ -272,6 +284,8 @@ Execution has two practical Gemini policies:
 - **Fast**: simple, backend-heavy changes may be Codex-only unless the plan or risk level calls for Gemini.
 - **Frontend strict**: frontend/UI implementation must use Gemini through the preview helper with `--prompt-template frontend` or `--prompt-template prototype`, request `OUTPUT: Unified Diff Patch ONLY`, then let Codex rewrite and apply the dirty prototype.
 - **Review strict**: any frontend/UI diff must get a bounded Gemini review through `--prompt-template review` or `--prompt-template frontend`; failed Gemini review is retried twice and then reported instead of being silently skipped.
+
+Execution delivery includes `完成度评分`. Missing real verification caps `Verification` at `10/20`; any remaining Critical blocker makes the final status `Blocked`.
 
 Use the typo-compatible alias:
 
@@ -302,6 +316,8 @@ For `/ccg:gptpro-plan` and `/ccg:gptpro-review`, Codex keeps the Codex + Gemini 
 Gemini Gate Before GPT Pro still applies to `/ccg:gptpro-plan` and `/ccg:gptpro-review`: Codex must read a real `CCG_GEMINI_RESPONSE_FILE` containing a non-empty Gemini response before creating those GPT Pro manual prompts. If required Gemini evidence fails, produces no response file, or writes an empty response, Codex stops in Chinese, does not create a GPT Pro bridge session, and must not invent Gemini findings.
 
 `/ccg:gptpro-exc` is different: Codex is the controller, Gemini only participates for frontend/full-stack frontend prototype or review evidence, GPT Pro is one manual second opinion, and Codex does the final landing. Backend-only execution companion requests may create the manual bridge with `--gemini-policy optional --gemini-evidence-role frontend-prototype` and no Gemini response file. Frontend/full-stack requests should first run Gemini with `--prompt-template frontend`, then pass `--gemini-response-file <CCG_GEMINI_RESPONSE_FILE>` and `--gemini-summary-file <summary-file>` so the prompt includes Gemini Frontend Prototype Evidence.
+
+GPT Pro bridge prompts now make scoring mandatory: plan mode includes `Requirement Completeness` and `Planning Readiness Scorecard`; review mode includes `VALIDATION REPORT` / `FRONTEND VALIDATION REPORT`; execution-companion mode includes `Implementation Readiness Scorecard`. GPT Pro scores are manual helper evidence, not final authority.
 
 The helper records Gemini provenance under `gemini_evidence` in `status.json`: `policy`, `role`, `available`, `response_file`, `response_non_empty`, `response_chars`, `response_sha256`, and `summary`. For required gate sessions it also injects Gemini Gate Evidence into `prompt.md`.
 
