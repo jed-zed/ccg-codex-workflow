@@ -38,6 +38,16 @@ Gemini and GPT Pro remain helper evidence only; Codex makes the final decision.
 - For `/ccg:gptpro-exc`, Gemini is conditional frontend evidence only: backend-only tasks should omit it, while frontend/full-stack tasks should use the bundled Gemini preview helper with `--prompt-template frontend`.
 - After the user saves GPT Pro output, synthesize Codex findings, Gemini evidence when present, and GPT Pro manual second opinion in Chinese; otherwise state that Gemini evidence was not used.
 
+## Scorecard Output Contracts
+
+The bridge prompt must make scoring an auditable output contract for every mode:
+
+- `plan` mode: GPT Pro must output `Requirement Completeness` using the original CCG `需求完整性评分（0-10）` dimensions and a `Planning Readiness Scorecard`. If the score is `<7`, Codex stops and asks for missing planning details instead of moving toward execution.
+- `review` mode: GPT Pro must output `VALIDATION REPORT` and `TOTAL SCORE: XX/100`; frontend/UI reviews must also output `FRONTEND VALIDATION REPORT`. GPT Pro must cross-score Codex primary review and Gemini Gate Evidence, and Codex adopts the more conservative score and blocker judgment.
+- `exc` mode: GPT Pro must output `Implementation Readiness Scorecard`. This is a manual second opinion only; GPT Pro does not write files, does not decide the final implementation, and does not override Codex verification.
+
+Scores must cite visible evidence from pasted task context, Gemini evidence when present, diffs, verification summaries, or explicit uncertainty. Missing evidence lowers the score instead of being guessed.
+
 ### Required Gate For Plan And Review
 
 Before creating a GPT Pro manual prompt for plan or review modes, Codex must have:

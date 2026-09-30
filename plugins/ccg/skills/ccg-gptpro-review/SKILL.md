@@ -15,6 +15,36 @@ Load and follow `skills/ccg-gptpro-bridge/SKILL.md`.
 - Run Gemini before GPT Pro using the bundled Gemini preview helper with `--prompt-template review`.
 - Follow the Gemini Gate Before GPT Pro from `skills/ccg-gptpro-bridge/SKILL.md`: require a real `CCG_GEMINI_RESPONSE_FILE`, read a non-empty Gemini response from it, stop and do not create a GPT Pro bridge session if it is missing or empty, and do not invent Gemini findings.
 - Include Codex's primary review notes, the Gemini response file path, and a concise Gemini findings summary in the GPT Pro prompt.
+- Require GPT Pro to cross-score Codex primary review and Gemini Gate Evidence with `VALIDATION REPORT` and, for frontend/UI-heavy reviews, `FRONTEND VALIDATION REPORT`.
+- Codex must adopt the more conservative score and blocking judgment when Codex, Gemini, and GPT Pro disagree.
+- Required GPT Pro code review score block:
+
+```text
+VALIDATION REPORT
+=================
+Task / Root Cause Coverage: XX/20 - [reason]
+Code Quality: XX/20 - [reason]
+Side Effects: XX/20 - [reason]
+Edge Cases: XX/20 - [reason]
+Test Coverage: XX/20 - [reason]
+
+TOTAL SCORE: XX/100
+```
+
+- Required GPT Pro frontend/UI score block when applicable:
+
+```text
+FRONTEND VALIDATION REPORT
+==========================
+User Experience: XX/20 - [reason]
+Visual Consistency: XX/20 - [reason]
+Accessibility: XX/20 - [reason]
+Performance: XX/20 - [reason]
+Browser Compatibility: XX/20 - [reason]
+
+TOTAL SCORE: XX/100
+```
+
 - Build a single-round review prompt by default.
 - Expected manual questions: 1.
 - Maximum manual questions: 2.
@@ -26,6 +56,7 @@ Load and follow `skills/ccg-gptpro-bridge/SKILL.md`.
   - possible false positives
   - Codex actions
 - Report in Chinese and synthesize Codex, Gemini, and GPT Pro findings.
+- Include `TOTAL SCORE: XX/100` in the final synthesis and explain any score that was lowered because of missing evidence or unresolved blockers.
 - Codex remains final owner.
 - Do not automate ChatGPT web login.
 - Do not read ChatGPT web DOM.

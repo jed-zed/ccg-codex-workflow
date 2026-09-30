@@ -23,4 +23,6 @@ This command is Codex-native:
 - Do not modify product code. This command may only write new CCG plan files under `.codex/ccg/plans/`; existing `.claude/plan/*.md` files are legacy compatibility inputs and may be revised only when the user explicitly names that existing file.
 - All user-facing output for this command must be Chinese by default, including usage/help, progress summaries, questions, failure reports, saved-plan summaries, and the next manual command.
 - The saved CCG plan content itself must be Chinese by default. Section headings, table headers, checklists, narrative analysis, risks, test strategy, and handoff prose must be Chinese. English is allowed only for literal file paths, commands, code identifiers, generated slugs, URLs, model names, and environment variables.
+- The plan must include `需求完整性评分（0-10）` with `目标明确性（0-3）`, `预期结果（0-3）`, `边界范围（0-2）`, `约束条件（0-2）`, `总分：X/10`, and `判定：>=7 继续；<7 停止并提出补充问题`.
+- If the requirement score is `<7`, stop and ask for missing information instead of writing a plan.
 - After writing the plan, show the saved path and the next manual command: `/ccg:execute <plan-path>`.

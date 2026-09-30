@@ -12,3 +12,33 @@ Review the current diff or the implementation associated with the supplied plan/
 Every Gemini call in the CCG workflow must use the bundled preview helper. Do not call the raw `gemini`, `gemini.cmd`, or `gemini.exe` CLI directly. `/ccg:gemini-preview` is only a manual smoke-test/debug entry; `/ccg:review` must open the same browser preview automatically whenever it asks Gemini for a second-pass review.
 
 When using Gemini, call the bundled preview helper with `--prompt-template review`. The template already carries the original CCG-style read-only and prioritized review protocol; put only the concrete diff, plan, and review focus in the task prompt.
+
+Every `/ccg:review` result must include an original CCG-style score block:
+
+```text
+VALIDATION REPORT
+=================
+Task / Root Cause Coverage: XX/20 - [reason]
+Code Quality: XX/20 - [reason]
+Side Effects: XX/20 - [reason]
+Edge Cases: XX/20 - [reason]
+Test Coverage: XX/20 - [reason]
+
+TOTAL SCORE: XX/100
+```
+
+For frontend/UI-heavy reviews, also include:
+
+```text
+FRONTEND VALIDATION REPORT
+==========================
+User Experience: XX/20 - [reason]
+Visual Consistency: XX/20 - [reason]
+Accessibility: XX/20 - [reason]
+Performance: XX/20 - [reason]
+Browser Compatibility: XX/20 - [reason]
+
+TOTAL SCORE: XX/100
+```
+
+Scores must reference concrete evidence. If a blocking issue remains, say so before the score and keep the final judgment conservative.

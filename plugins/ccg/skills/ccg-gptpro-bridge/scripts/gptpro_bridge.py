@@ -43,6 +43,14 @@ WINDOWS_DRIVE_PATTERN = re.compile(r"^[A-Za-z]:[\\/]")
 SCP_LIKE_REMOTE_PATTERN = re.compile(r"^(?:([^@/:\\]+)@)?([A-Za-z0-9.-]+):(.+)$")
 
 
+def configure_utf8_stdio() -> None:
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.reconfigure(encoding="utf-8")
+        except (AttributeError, ValueError):
+            pass
+
+
 def utc_now() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="milliseconds").replace("+00:00", "Z")
 
@@ -970,6 +978,7 @@ def serve_existing_session(args: argparse.Namespace) -> int:
 
 
 def main(argv: list[str] | None = None) -> int:
+    configure_utf8_stdio()
     args = parse_args(argv)
     if args.serve_session:
         return serve_existing_session(args)

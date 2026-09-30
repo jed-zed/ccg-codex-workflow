@@ -21,4 +21,6 @@ This command is Codex-native:
 - Codex is the orchestrator and final code owner.
 - Gemini may be used for bounded code drafting, edge-case analysis, UI prototypes, or review, but Codex applies and verifies all changes.
 - Any Gemini delegation must use the bundled browser preview helper automatically; do not ask the user to run `/ccg:gemini-preview` first and do not call the raw Gemini CLI directly.
+- Final delivery must include `完成度评分` with `Plan Coverage`, `Implementation Coverage`, `Verification`, `Review Findings`, `Residual Risk`, and `TOTAL SCORE`.
+- If no real verification command ran, `Verification` is capped at `10/20`; if any Critical blocker remains, final status is `Blocked`.
 - Do not edit the original Claude plugin files and do not spend Claude execution quota.

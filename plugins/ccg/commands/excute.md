@@ -13,3 +13,5 @@ The user invoked:
 ```
 
 This is a typo-compatible alias of `/ccg:execute`. Use the installed CCG plugin skill `ccg:executor` and follow it exactly. Treat `$ARGUMENTS` as the plan path or task description. The architecture is Codex-led: Gemini assists only when useful; Codex owns final implementation and verification.
+
+Final delivery must include `完成度评分` with `Plan Coverage`, `Implementation Coverage`, `Verification`, `Review Findings`, `Residual Risk`, and `TOTAL SCORE`.

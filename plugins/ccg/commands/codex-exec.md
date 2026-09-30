@@ -13,3 +13,5 @@ The user invoked:
 ```
 
 Use the installed CCG plugin skill `ccg:executor` and follow it exactly. This command is equivalent to `/ccg:execute` in this Codex plugin: Codex reads `.codex/ccg/plans/*.md` plans or explicit legacy `.claude/plan/*.md` inputs, gathers context, optionally delegates narrow tasks to Gemini, applies final edits, verifies, reviews, and reports in Chinese.
+
+Final delivery must include `完成度评分` with `Plan Coverage`, `Implementation Coverage`, `Verification`, `Review Findings`, `Residual Risk`, and `TOTAL SCORE`.

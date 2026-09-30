@@ -165,6 +165,26 @@ Report in Chinese with:
 - changed files;
 - verification commands and results;
 - any blockers, residual risks, or manual follow-up.
+- a mandatory original CCG-style completion scorecard:
+
+```markdown
+### 完成度评分
+| Dimension | Score | Evidence |
+| --- | ---: | --- |
+| Plan Coverage | XX/20 | <计划项完成证据> |
+| Implementation Coverage | XX/20 | <代码/diff 证据> |
+| Verification | XX/20 | <测试/检查命令结果> |
+| Review Findings | XX/20 | <Critical/Warning/Info 状态> |
+| Residual Risk | XX/20 | <遗留风险> |
+| **TOTAL SCORE** | **XX/100** | <Ready / Needs Follow-up / Blocked> |
+```
+
+Scoring rules:
+
+- Score only from visible evidence: plan items, diff/code references, verification output, review findings, and stated residual risks.
+- If no real verification command was run, `Verification` must be at most `10/20`.
+- If any Critical blocker remains, the `TOTAL SCORE` status must be `Blocked`.
+- Use `Ready` only when the implementation is verified and no blocking risk remains; use `Needs Follow-up` for incomplete or warning-heavy work.
 
 Do not commit unless the user asks.
 

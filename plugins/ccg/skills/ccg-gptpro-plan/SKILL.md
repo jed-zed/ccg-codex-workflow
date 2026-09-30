@@ -15,6 +15,8 @@ Load and follow `skills/ccg-gptpro-bridge/SKILL.md`.
 - Run Gemini before GPT Pro using the bundled Gemini preview helper with `--prompt-template plan`.
 - Follow the Gemini Gate Before GPT Pro from `skills/ccg-gptpro-bridge/SKILL.md`: require a real `CCG_GEMINI_RESPONSE_FILE`, read a non-empty Gemini response from it, stop and do not create a GPT Pro bridge session if it is missing or empty, and do not invent Gemini findings.
 - Include Codex's planning context, the Gemini response file path, and a concise Gemini findings summary in the GPT Pro prompt.
+- Include the original CCG `需求完整性评分（0-10）` with `目标明确性（0-3）`, `预期结果（0-3）`, `边界范围（0-2）`, `约束条件（0-2）`, `总分：X/10`, and `判定：>=7 继续；<7 停止并提出补充问题`.
+- Require GPT Pro to output a `Planning Readiness Scorecard` for plan maturity, ambiguity, risk, testability, and whether Codex should proceed.
 - Build a single-round planning prompt by default.
 - Expected manual questions: 1.
 - Maximum manual questions: 2.
@@ -22,6 +24,7 @@ Load and follow `skills/ccg-gptpro-bridge/SKILL.md`.
 - Use `scripts/gptpro_bridge.py --mode plan --detach-preview --open-preview --gemini-response-file <CCG_GEMINI_RESPONSE_FILE> --gemini-summary-file <summary-file>`.
 - Read the saved response file only after the user manually saves it.
 - Summarize and synthesize Codex, Gemini, and GPT Pro findings in Chinese.
+- Preserve the Plan-only Boundary: score readiness only; do not let the GPT Pro score become an execution trigger.
 - Codex remains final owner.
 - Do not automate ChatGPT web login.
 - Do not read ChatGPT web DOM.

@@ -25,6 +25,8 @@ This is a Codex-led execution-companion workflow: Codex controls implementation,
 - Use `scripts/gptpro_bridge.py --mode exc --detach-preview --open-preview --gemini-policy optional --gemini-evidence-role frontend-prototype`.
 - When frontend/full-stack Gemini output is available, add `--gemini-response-file <CCG_GEMINI_RESPONSE_FILE> --gemini-summary-file <summary-file>`.
 - GPT Pro output is a sketch, pseudo patch, test idea list, or edge-case review.
+- GPT Pro output must include an `Implementation Readiness Scorecard` for plan fit, implementation completeness, verification readiness, risk, and adoption recommendation.
+- The `Implementation Readiness Scorecard` is a manual second-opinion signal only; it does not make GPT Pro an executor and does not decide the final implementation.
 - Report in Chinese and synthesize Codex, Gemini frontend evidence, and GPT Pro manual second opinion when Gemini evidence exists; otherwise synthesize Codex and GPT Pro findings and state that Gemini frontend evidence was not used.
 - Codex remains final owner.
 - Do not automate ChatGPT web login.
